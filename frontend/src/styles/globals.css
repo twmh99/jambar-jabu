@@ -1,0 +1,204 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===========================================
+   🎨 THEME: Corporate Minimalist (Navy & Gold)
+   =========================================== */
+:root {
+  --background: 220 20% 98%; /* #f9fafc */
+  --foreground: 220 70% 10%; /* #0b2545 */
+
+  --primary: 220 70% 20%; /* Navy */
+  --primary-foreground: 0 0% 100%;
+
+  --accent: 48 90% 60%; /* Gold */
+  --accent-foreground: 220 70% 15%;
+
+  --muted: 220 20% 90%; /* Abu lembut */
+  --muted-foreground: 220 15% 45%;
+
+  --border: 220 20% 80%;
+  --input: 0 0% 100%;
+  --card: 0 0% 100%;
+  --card-foreground: 220 70% 10%;
+
+  --success: 145 63% 45%;
+  --warning: 45 90% 50%;
+  --destructive: 0 70% 55%;
+  --ring: 48 90% 60%;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --shadow-soft: 0 2px 8px rgba(11, 37, 69, 0.1);
+  --shadow-elevated: 0 8px 20px rgba(11, 37, 69, 0.15);
+}
+
+/* ===========================================
+   🧠 BASE STYLES
+   =========================================== */
+body {
+  @apply font-body text-[hsl(var(--foreground))] bg-[hsl(var(--background))] antialiased;
+  line-height: 1.6;
+}
+
+/* Scrollbar minimalis */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground));
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--primary));
+}
+
+/* ===========================================
+   🧱 GLOBAL COMPONENT STYLES
+   =========================================== */
+
+/* Card styling */
+.ds-card {
+  @apply bg-white shadow-soft rounded-lg border border-[hsl(var(--border))] p-4 transition hover:shadow-elevated;
+}
+
+/* Button base */
+.ds-btn {
+  @apply px-4 py-2 rounded-md font-medium transition-all duration-200 cursor-pointer;
+}
+
+/* ✅ Fixed button styles (no hover errors) */
+.ds-btn-primary {
+  @apply bg-[hsl(var(--primary))] text-white transition-all duration-200;
+}
+.ds-btn-primary:hover {
+  background-color: hsl(var(--primary) / 0.9);
+}
+
+.ds-btn-accent {
+  @apply bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))] transition-all duration-200;
+}
+.ds-btn-accent:hover {
+  background-color: hsl(var(--accent) / 0.9);
+}
+
+.ds-btn-outline {
+  @apply border border-[hsl(var(--border))] bg-transparent text-[hsl(var(--primary))] transition-all duration-200;
+}
+.ds-btn-outline:hover {
+  background-color: hsl(var(--muted));
+}
+
+/* Input & Select */
+input,
+select,
+textarea {
+  @apply border border-[hsl(var(--border))] rounded-md px-3 py-2 bg-[hsl(var(--input))] text-[hsl(var(--foreground))] focus:ring-2 focus:ring-[hsl(var(--ring))] outline-none transition;
+}
+
+/* Label */
+label {
+  @apply text-sm font-medium text-[hsl(var(--muted-foreground))];
+}
+
+/* Table */
+table {
+  @apply w-full text-sm border-collapse;
+}
+th {
+  @apply text-left font-semibold border-b border-[hsl(var(--border))] pb-2 text-[hsl(var(--muted-foreground))];
+}
+td {
+  @apply py-2 border-b border-[hsl(var(--muted))];
+}
+tr:hover td {
+  background-color: hsl(var(--muted) / 0.3);
+}
+
+/* Badges */
+.ds-badge {
+  @apply inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full;
+}
+
+/* ===========================================
+   ⚡ INTERACTION STATES
+   =========================================== */
+
+/* Link transition */
+a {
+  @apply transition-colors duration-200 text-[hsl(var(--primary))];
+}
+a:hover {
+  color: hsl(var(--accent));
+}
+
+/* Modal backdrop */
+.ds-modal-backdrop {
+  @apply fixed inset-0 bg-black/40 flex items-center justify-center z-50;
+}
+
+/* Toast notifications */
+.toast-success {
+  @apply bg-[hsl(var(--success))] text-white shadow-elevated;
+}
+.toast-error {
+  @apply bg-[hsl(var(--destructive))] text-white shadow-elevated;
+}
+.toast-info {
+  @apply bg-[hsl(var(--primary))] text-white shadow-elevated;
+}
+
+/* ===========================================
+   🌙 DARK MODE
+   =========================================== */
+.dark {
+  --background: 220 40% 10%;
+  --foreground: 0 0% 100%;
+  --card: 220 40% 12%;
+  --muted: 220 20% 20%;
+  --muted-foreground: 0 0% 80%;
+  --border: 220 20% 25%;
+  --primary: 48 90% 60%;
+  --accent: 220 60% 25%;
+}
+
+/* ===============================
+   🔧 ICON FIXES FOR EMPLOYEE TABLE
+   =============================== */
+
+button i.fa-solid {
+  font-size: 14px;
+  display: inline-block;
+  vertical-align: middle;
+  color: hsl(var(--primary));
+  transition: color 0.2s ease, transform 0.15s ease;
+}
+
+button:hover i.fa-pen {
+  color: hsl(var(--accent)); /* gold hover */
+  transform: scale(1.15);
+}
+
+button:hover i.fa-trash {
+  color: hsl(var(--destructive)); /* merah hover */
+  transform: scale(1.15);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out;
+}
+.animate-scaleIn {
+  animation: scaleIn 0.25s ease-out;
+}
