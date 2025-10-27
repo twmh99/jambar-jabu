@@ -2,203 +2,112 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ===========================================
-   🎨 THEME: Corporate Minimalist (Navy & Gold)
-   =========================================== */
+/* ============================================
+   🎨 Tema Warna SMPJ — iOS-inspired
+============================================ */
 :root {
-  --background: 220 20% 98%; /* #f9fafc */
-  --foreground: 220 70% 10%; /* #0b2545 */
-
-  --primary: 220 70% 20%; /* Navy */
-  --primary-foreground: 0 0% 100%;
-
-  --accent: 48 90% 60%; /* Gold */
-  --accent-foreground: 220 70% 15%;
-
-  --muted: 220 20% 90%; /* Abu lembut */
-  --muted-foreground: 220 15% 45%;
-
-  --border: 220 20% 80%;
-  --input: 0 0% 100%;
+  --background: 210 40% 98%;
+  --foreground: 220 15% 20%;
   --card: 0 0% 100%;
-  --card-foreground: 220 70% 10%;
-
-  --success: 145 63% 45%;
-  --warning: 45 90% 50%;
-  --destructive: 0 70% 55%;
-  --ring: 48 90% 60%;
-
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-
-  --shadow-soft: 0 2px 8px rgba(11, 37, 69, 0.1);
-  --shadow-elevated: 0 8px 20px rgba(11, 37, 69, 0.15);
+  --muted: 220 20% 90%;
+  --muted-foreground: 220 10% 45%;
+  --accent: 190 95% 45%;         /* Aqua / Teal */
+  --accent-foreground: 0 0% 100%;
+  --primary: 220 80% 50%;        /* iOS Blue */
+  --success: 150 60% 45%;        /* Green */
+  --warning: 45 95% 50%;         /* Amber */
+  --destructive: 0 80% 60%;      /* Red */
+  --border: 220 15% 85%;
+  --radius-sm: 8px;
 }
 
-/* ===========================================
-   🧠 BASE STYLES
-   =========================================== */
-body {
-  @apply font-body text-[hsl(var(--foreground))] bg-[hsl(var(--background))] antialiased;
-  line-height: 1.6;
+.dark {
+  --background: 220 30% 10%;
+  --foreground: 220 15% 95%;
+  --card: 220 30% 16%;
+  --muted: 220 15% 22%;
+  --muted-foreground: 220 10% 70%;
+  --accent: 190 90% 55%;
+  --primary: 200 95% 65%;
+  --success: 150 60% 45%;
+  --warning: 45 95% 60%;
+  --destructive: 0 80% 65%;
+  --border: 220 15% 35%;
 }
 
-/* Scrollbar minimalis */
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-::-webkit-scrollbar-thumb {
-  background-color: hsl(var(--muted-foreground));
-  border-radius: 8px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background-color: hsl(var(--primary));
-}
-
-/* ===========================================
-   🧱 GLOBAL COMPONENT STYLES
-   =========================================== */
-
-/* Card styling */
+/* ============================================
+   🧊 Komponen Global (Card, Input, Button, Badge)
+============================================ */
 .ds-card {
-  @apply bg-white shadow-soft rounded-lg border border-[hsl(var(--border))] p-4 transition hover:shadow-elevated;
+  background-color: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border-radius: 1.25rem;
+  border: 1px solid hsl(var(--border));
+  transition: all 0.3s ease;
 }
 
-/* Button base */
+.ds-card:hover {
+  box-shadow: 0 10px 20px -10px hsl(var(--primary) / 0.25);
+}
+
 .ds-btn {
-  @apply px-4 py-2 rounded-md font-medium transition-all duration-200 cursor-pointer;
+  @apply px-4 py-2.5 font-medium rounded-xl transition-all duration-300;
+  background-color: hsl(var(--primary));
+  color: white;
 }
 
-/* ✅ Fixed button styles (no hover errors) */
-.ds-btn-primary {
-  @apply bg-[hsl(var(--primary))] text-white transition-all duration-200;
-}
-.ds-btn-primary:hover {
-  background-color: hsl(var(--primary) / 0.9);
-}
-
-.ds-btn-accent {
-  @apply bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))] transition-all duration-200;
-}
-.ds-btn-accent:hover {
-  background-color: hsl(var(--accent) / 0.9);
+.ds-btn:hover {
+  background-color: hsl(var(--accent));
+  transform: scale(1.02);
 }
 
 .ds-btn-outline {
-  @apply border border-[hsl(var(--border))] bg-transparent text-[hsl(var(--primary))] transition-all duration-200;
-}
-.ds-btn-outline:hover {
-  background-color: hsl(var(--muted));
-}
-
-/* Input & Select */
-input,
-select,
-textarea {
-  @apply border border-[hsl(var(--border))] rounded-md px-3 py-2 bg-[hsl(var(--input))] text-[hsl(var(--foreground))] focus:ring-2 focus:ring-[hsl(var(--ring))] outline-none transition;
-}
-
-/* Label */
-label {
-  @apply text-sm font-medium text-[hsl(var(--muted-foreground))];
-}
-
-/* Table */
-table {
-  @apply w-full text-sm border-collapse;
-}
-th {
-  @apply text-left font-semibold border-b border-[hsl(var(--border))] pb-2 text-[hsl(var(--muted-foreground))];
-}
-td {
-  @apply py-2 border-b border-[hsl(var(--muted))];
-}
-tr:hover td {
-  background-color: hsl(var(--muted) / 0.3);
-}
-
-/* Badges */
-.ds-badge {
-  @apply inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full;
-}
-
-/* ===========================================
-   ⚡ INTERACTION STATES
-   =========================================== */
-
-/* Link transition */
-a {
-  @apply transition-colors duration-200 text-[hsl(var(--primary))];
-}
-a:hover {
-  color: hsl(var(--accent));
-}
-
-/* Modal backdrop */
-.ds-modal-backdrop {
-  @apply fixed inset-0 bg-black/40 flex items-center justify-center z-50;
-}
-
-/* Toast notifications */
-.toast-success {
-  @apply bg-[hsl(var(--success))] text-white shadow-elevated;
-}
-.toast-error {
-  @apply bg-[hsl(var(--destructive))] text-white shadow-elevated;
-}
-.toast-info {
-  @apply bg-[hsl(var(--primary))] text-white shadow-elevated;
-}
-
-/* ===========================================
-   🌙 DARK MODE
-   =========================================== */
-.dark {
-  --background: 220 40% 10%;
-  --foreground: 0 0% 100%;
-  --card: 220 40% 12%;
-  --muted: 220 20% 20%;
-  --muted-foreground: 0 0% 80%;
-  --border: 220 20% 25%;
-  --primary: 48 90% 60%;
-  --accent: 220 60% 25%;
-}
-
-/* ===============================
-   🔧 ICON FIXES FOR EMPLOYEE TABLE
-   =============================== */
-
-button i.fa-solid {
-  font-size: 14px;
-  display: inline-block;
-  vertical-align: middle;
+  background: transparent;
   color: hsl(var(--primary));
-  transition: color 0.2s ease, transform 0.15s ease;
+  border: 1.5px solid hsl(var(--primary));
 }
 
-button:hover i.fa-pen {
-  color: hsl(var(--accent)); /* gold hover */
-  transform: scale(1.15);
+.ds-input {
+  @apply w-full px-3 py-2 rounded-md border outline-none transition;
+  background-color: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border-color: hsl(var(--border));
 }
 
-button:hover i.fa-trash {
-  color: hsl(var(--destructive)); /* merah hover */
-  transform: scale(1.15);
+.ds-input:focus {
+  border-color: hsl(var(--primary));
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.3);
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.ds-badge {
+  @apply text-xs px-3 py-1 rounded-full font-semibold;
+  background-color: hsl(var(--muted));
+  color: hsl(var(--foreground));
 }
-@keyframes scaleIn {
-  from { transform: scale(0.95); opacity: 0; }
-  to { transform: scale(1); opacity: 1; }
+
+/* ============================================
+   🌈 Animasi Aurora Dinamis
+============================================ */
+@keyframes auroraFloat {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-20px) scale(1.05);
+  }
 }
-.animate-fadeIn {
-  animation: fadeIn 0.2s ease-out;
+
+.aurora-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: -10;
 }
-.animate-scaleIn {
-  animation: scaleIn 0.25s ease-out;
+
+.aurora-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.3;
+  animation: auroraFloat 12s ease-in-out infinite alternate;
 }

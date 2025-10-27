@@ -34,7 +34,7 @@ const navByRole = {
 };
 
 /* ======================================================
-   🌙 Layout adaptif terang/gelap + Toggle manual iOS
+   🌙 Layout adaptif terang/gelap + Aurora dinamis
    ====================================================== */
 export default function MainLayout() {
   const navigate = useNavigate();
@@ -65,8 +65,7 @@ export default function MainLayout() {
     try {
       setLoading(true);
       await api.post("/logout");
-    } catch {}
-    finally {
+    } finally {
       localStorage.clear();
       toast.info("Berhasil keluar dari sistem.");
       setShowLogout(false);
@@ -90,20 +89,20 @@ export default function MainLayout() {
           : "bg-gradient-to-br from-[#ecf5ff] via-[#f7f9fc] to-[#e0f7fa] text-gray-800"
       }`}
     >
-      {/* === Efek Aurora === */}
+      {/* 🌈 Efek Aurora Background */}
       <div className="absolute inset-0 -z-10 overflow-hidden">
         <div
-          className={`absolute top-[-10%] left-[-10%] w-[70vw] h-[70vw] rounded-full opacity-30 blur-3xl animate-float-slow ${
+          className={`absolute top-[-10%] left-[-15%] w-[70vw] h-[70vw] rounded-full blur-3xl opacity-25 animate-float-slow ${
             activeTheme === "dark"
-              ? "bg-gradient-to-r from-[#5ee7df] to-[#b490ca]"
-              : "bg-gradient-to-r from-[#8ec5fc] to-[#e0c3fc]"
+              ? "bg-gradient-to-r from-[#22d3ee]/40 to-[#818cf8]/40"
+              : "bg-gradient-to-r from-[#7dd3fc]/40 to-[#c084fc]/30"
           }`}
         />
         <div
-          className={`absolute bottom-[-15%] right-[-15%] w-[60vw] h-[60vw] rounded-full opacity-25 blur-3xl animate-float ${
+          className={`absolute bottom-[-20%] right-[-15%] w-[60vw] h-[60vw] rounded-full blur-3xl opacity-25 animate-float ${
             activeTheme === "dark"
-              ? "bg-gradient-to-tr from-[#4facfe] to-[#00f2fe]"
-              : "bg-gradient-to-tr from-[#a1c4fd] to-[#c2e9fb]"
+              ? "bg-gradient-to-tr from-[#0ea5e9]/40 to-[#67e8f9]/40"
+              : "bg-gradient-to-tr from-[#bae6fd]/40 to-[#e0f2fe]/40"
           }`}
         />
       </div>
@@ -134,7 +133,11 @@ export default function MainLayout() {
             }}
             className="flex items-center gap-3 hover:opacity-90 transition"
           >
-            <img src={logoAurora} alt="SMPJ Logo" className="h-9 w-9 rounded-xl object-cover shadow-md" />
+            <img
+              src={logoAurora}
+              alt="SMPJ Logo"
+              className="h-9 w-9 rounded-xl object-cover shadow-md"
+            />
             <h1
               className={`text-lg font-semibold tracking-tight ${
                 activeTheme === "dark" ? "text-gray-100" : "text-gray-800"
@@ -144,32 +147,21 @@ export default function MainLayout() {
             </h1>
           </button>
 
-          {/* === Kanan atas === */}
+          {/* === Header kanan === */}
           <div className="flex items-center gap-4">
-            {/* 🌗 iOS Theme Switch */}
+            {/* iOS Theme Switch */}
             <button
               onClick={toggleTheme}
               className={`relative w-14 h-7 flex items-center rounded-full transition-all duration-500 ${
                 activeTheme === "dark"
-                  ? "bg-gradient-to-r from-[#0ea5e9] to-[#06b6d4]"
-                  : activeTheme === "light"
-                  ? "bg-gray-300"
-                  : "bg-gradient-to-r from-[#22d3ee] to-[#818cf8]"
+                  ? "bg-gradient-to-r from-[#38bdf8] to-[#818cf8]"
+                  : "bg-gradient-to-r from-[#bae6fd] to-[#c7d2fe]"
               }`}
               title={`Ubah tema (${theme})`}
             >
               <div
                 className={`absolute w-6 h-6 rounded-full bg-white shadow-md transform transition-all duration-500 ${
-                  activeTheme === "dark"
-                    ? "translate-x-7"
-                    : activeTheme === "light"
-                    ? "translate-x-1"
-                    : "translate-x-3 bg-sky-50"
-                }`}
-              />
-              <i
-                className={`absolute text-xs left-1 ${
-                  activeTheme === "dark" ? "text-yellow-300 fa-solid fa-moon" : "fa-regular fa-sun text-yellow-500"
+                  activeTheme === "dark" ? "translate-x-7" : "translate-x-1"
                 }`}
               />
             </button>
@@ -216,14 +208,14 @@ export default function MainLayout() {
                   [
                     "flex items-center gap-3 px-4 py-2.5 rounded-2xl text-[15px] font-medium transition-all duration-300",
                     isActive
-                      ? "bg-gradient-to-r from-[#60a5fa] to-[#22d3ee] text-white shadow-[0_0_12px_rgba(34,211,238,0.6)] scale-[1.03]"
+                      ? "bg-gradient-to-r from-[#38bdf8] to-[#06b6d4] text-white shadow-[0_0_12px_rgba(56,189,248,0.5)] scale-[1.03]"
                       : activeTheme === "dark"
                       ? "text-gray-300 hover:bg-[#334155]/70 hover:text-[#38bdf8]"
                       : "text-gray-700 hover:bg-[#e0f2fe]/80 hover:text-[#0369a1]",
                   ].join(" ")
                 }
               >
-                <i className={it.icon + " w-4"} />
+                <i className={it.icon + " text-[16px]"} />
                 <span>{it.label}</span>
               </NavLink>
             ))}
