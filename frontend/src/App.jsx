@@ -1,51 +1,41 @@
-import React from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import './styles/globals.css'
-import './index.css'
+import React from "react";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import "./styles/globals.css";
+import "./index.css";
 
-import { ToastViewport } from './components/ui/toast'
+import { ToastViewport } from "./components/ui/toast";
+import MainLayout from "./layouts/MainLayout";
+
+// 🔒 Private Route
+import PrivateRoute from "./lib/PrivateRoute";
 
 // ==== Pages ====
-import Login from './pages/Login'
-
-// ==== Layout Tunggal (Untuk Semua Role) ====
-import MainLayout from './layouts/MainLayout'
+import Login from "./pages/Login";
 
 // ==== Owner Pages ====
-import OwnerDashboard from './pages/owner/OwnerDashboard'
-import Employees from './pages/owner/Employees'
-import Analytics from './pages/owner/Analytics'
-import AttendanceReport from './pages/owner/AttendanceReport'
-import PayrollReport from './pages/owner/PayrollReport'
+import OwnerDashboard from "./pages/owner/OwnerDashboard";
+import Employees from "./pages/owner/Employees";
+import Analytics from "./pages/owner/Analytics";
+import AttendanceReport from "./pages/owner/AttendanceReport";
+import PayrollReport from "./pages/owner/PayrollReport";
 
 // ==== Supervisor Pages ====
-import SupervisorDashboard from './pages/supervisor/SupervisorDashboard'
-import JadwalKerja from './pages/supervisor/JadwalKerja'
-import AbsensiPegawai from './pages/supervisor/AbsensiPegawai'
-import RekapVerifikasi from './pages/supervisor/RekapVerifikasi'
-import LaporanPeriodik from './pages/supervisor/LaporanPeriodik'
+import SupervisorDashboard from "./pages/supervisor/SupervisorDashboard";
+import JadwalKerja from "./pages/supervisor/JadwalKerja";
+import SupervisorEmployees from "./pages/supervisor/Employees";
+import AbsensiPegawai from "./pages/supervisor/AbsensiPegawai";
+import RekapVerifikasi from "./pages/supervisor/RekapVerifikasi";
+import LaporanPeriodik from "./pages/supervisor/LaporanPeriodik";
 
 // ==== Employee Pages ====
-import EmployeeDashboard from './pages/employee/EmployeeDashboard'
-import Schedule from './pages/employee/Schedule'
-import Attendance from './pages/employee/Attendance'
-import Pay from './pages/employee/Pay'
-import Profile from './pages/employee/Profile'
+import EmployeeDashboard from "./pages/employee/EmployeeDashboard";
+import Schedule from "./pages/employee/Schedule";
+import Attendance from "./pages/employee/Attendance";
+import Pay from "./pages/employee/Pay";
+import Profile from "./pages/employee/Profile";
 
 /* ============================================================
-   🔒 Protected Route — hanya izinkan user dengan token valid
-   ============================================================ */
-function ProtectedRoute({ children, allow }) {
-  const token = localStorage.getItem('smpj_token')
-  const role = (localStorage.getItem('smpj_role') || '').toLowerCase()
-
-  if (!token) return <Navigate to="/login" replace />
-  if (allow && !allow.includes(role)) return <Navigate to="/login" replace />
-  return children
-}
-
-/* ============================================================
-   🚀 App Root
+   🚀 APP ROOT
    ============================================================ */
 export default function App() {
   return (
@@ -59,12 +49,13 @@ export default function App() {
         <Route
           path="/owner/*"
           element={
-            <ProtectedRoute allow={['owner']}>
+            <PrivateRoute role="owner">
               <MainLayout />
-            </ProtectedRoute>
+            </PrivateRoute>
           }
         >
           <Route index element={<OwnerDashboard />} />
+          <Route path="dashboard" element={<OwnerDashboard />} />
           <Route path="employees" element={<Employees />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="attendance" element={<AttendanceReport />} />
@@ -75,14 +66,15 @@ export default function App() {
         <Route
           path="/supervisor/*"
           element={
-            <ProtectedRoute allow={['supervisor', 'owner']}>
+            <PrivateRoute role="supervisor">
               <MainLayout />
-            </ProtectedRoute>
+            </PrivateRoute>
           }
         >
           <Route index element={<SupervisorDashboard />} />
           <Route path="dashboard" element={<SupervisorDashboard />} />
           <Route path="jadwal" element={<JadwalKerja />} />
+          <Route path="employees" element={<SupervisorEmployees />} />
           <Route path="absensi" element={<AbsensiPegawai />} />
           <Route path="rekap" element={<RekapVerifikasi />} />
           <Route path="laporan" element={<LaporanPeriodik />} />
@@ -92,22 +84,23 @@ export default function App() {
         <Route
           path="/employee/*"
           element={
-            <ProtectedRoute allow={['employee', 'supervisor', 'owner']}>
+            <PrivateRoute role="employee">
               <MainLayout />
-            </ProtectedRoute>
+            </PrivateRoute>
           }
         >
           <Route index element={<EmployeeDashboard />} />
+          <Route path="dashboard" element={<EmployeeDashboard />} />
           <Route path="schedule" element={<Schedule />} />
           <Route path="attendance" element={<Attendance />} />
           <Route path="pay" element={<Pay />} />
           <Route path="profile" element={<Profile />} />
         </Route>
 
-        {/* ==== DEFAULT ROUTE ==== */}
+        {/* ==== DEFAULT / FALLBACK ==== */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
-  )
+  );
 }

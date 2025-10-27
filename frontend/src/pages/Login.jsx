@@ -1,79 +1,104 @@
-import React from 'react'
-import { Input, Label } from '../components/ui/input'
-import { Button } from '../components/ui/button'
-import { toast } from '../components/ui/toast'
-import { useNavigate } from 'react-router-dom'
-import api from '../lib/api'
+import React, { useState } from "react";
+import { Input, Label } from "../components/ui/input";
+import { Button } from "../components/ui/button";
+import { toast } from "../components/ui/toast";
+import { useNavigate } from "react-router-dom";
+import api from "../services/api";
 
-const heroImg = 'https://images.unsplash.com/photo-1666032119084-82351976a922'
+const heroImg = "https://i.pinimg.com/736x/fc/a0/bf/fca0bf9cd1188b01b9ccd16617655080.jpg";
 
 export default function Login() {
-  const navigate = useNavigate()
+  const navigate = useNavigate();
+  const [login, setLogin] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const submit = async (e) => {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    const username = fd.get('username')?.trim()
-    const password = fd.get('password')?.trim()
+  /** 🔐 SUBMIT LOGIN */
+  const handleSubmit = async (e) => {
+    e.preventDefault();
 
-    if (!username || !password) {
-      toast.error('Isi username & password')
-      return
+    if (!login.trim() || !password.trim()) {
+      toast.error("Isi email/nama dan password!");
+      return;
     }
 
     try {
-      // Standar OAuth2: form-urlencoded
-      const form = new URLSearchParams()
-      form.append('username', username)
-      form.append('password', password)
+      setLoading(true);
 
-      const res = await api.post('auth/login', form, {
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      })
+      // Kompatibilitas penuh dengan backend Laravel:
+      const payload = {
+        login: login, // bisa nama / email
+        email: login, // jaga kompatibilitas jika backend masih pakai email
+        password: password,
+      };
 
-      const { access_token, role, name } = res.data
-      const normalizedRole = (role || '').toLowerCase()
+      const res = await api.post("/login", payload);
 
-      // 💾 Simpan token & user
-      localStorage.setItem('smpj_token', access_token)
-      localStorage.setItem('smpj_role', normalizedRole)
-      localStorage.setItem('smpj_user', JSON.stringify({ name, role: normalizedRole, username }))
+      // destruktur data dari response Laravel
+      const { access_token, role, user, must_change_password } = res.data;
 
-      toast.success('Berhasil masuk!')
+      // simpan ke localStorage
+      localStorage.setItem("smpj_token", access_token);
+      localStorage.setItem("smpj_role", role);
+      localStorage.setItem("smpj_user", JSON.stringify(user));
 
-      // 🚀 Redirect sesuai role
-      if (normalizedRole === 'owner') navigate('/owner')
-      else if (normalizedRole === 'supervisor') navigate('/supervisor/dashboard')
-      else if (normalizedRole === 'employee') navigate('/employee')
-      else {
-        toast.error('Peran pengguna tidak dikenali')
-        navigate('/login')
+      if (must_change_password) {
+        toast.warning("Silakan ubah password Anda terlebih dahulu!");
+        navigate("/employee/profile");
+        return;
+      }
+
+      toast.success("Login berhasil!");
+
+      // navigasi otomatis berdasarkan role
+      switch (role) {
+        case "owner":
+          navigate("/owner/dashboard");
+          break;
+        case "supervisor":
+          navigate("/supervisor/dashboard");
+          break;
+        case "pegawai":
+        case "employee":
+          navigate("/employee/dashboard");
+          break;
+        default:
+          navigate("/employee/dashboard");
+          break;
       }
     } catch (err) {
-      const msg = err?.response?.data?.detail || 'Login gagal'
-      toast.error(`❌ ${msg}`)
-      console.error('Login error:', err?.response?.status, err?.response?.data)
+      console.error("Login error:", err);
+      localStorage.removeItem("smpj_token"); // clear token lama jika error
+
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.errors?.login?.[0] ||
+        err?.response?.data?.errors?.email?.[0] ||
+        "Login gagal. Periksa email/nama & password.";
+
+      toast.error(msg);
+    } finally {
+      setLoading(false);
     }
-  }
+  };
 
-  // ❌ Hapus auto redirect — biarkan user login manual setiap kali
-  // React.useEffect(() => { ... }) dihapus
-
+  /** 💄 UI */
   return (
     <div className="min-h-screen grid md:grid-cols-2">
-      {/* LEFT HERO IMAGE */}
+      {/* ======== KIRI: HERO IMAGE ======== */}
       <div
         className="hidden md:block relative noise-overlay"
         style={{
           backgroundImage: `url(${heroImg})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
+          backgroundSize: "cover",
+          backgroundPosition: "center",
         }}
       >
         <div
           className="absolute inset-0"
           style={{
-            background: 'linear-gradient(180deg, rgba(12,30,53,0.6), rgba(12,30,53,0.6))',
+            background:
+              "linear-gradient(180deg, rgba(12,30,53,0.7), rgba(12,30,53,0.7))",
           }}
         />
         <div className="absolute bottom-8 left-8 right-8 text-[hsl(var(--primary-foreground))]">
@@ -81,26 +106,35 @@ export default function Login() {
             SMPJ — Sistem Manajemen Pegawai & Jadwal
           </h1>
           <p className="mt-3 text-[hsl(var(--muted))] max-w-lg">
-            Kelola jadwal, absensi, dan gaji pegawai Jambar Jabu secara cepat dan transparan.
+            Kelola jadwal, absensi, dan gaji pegawai Jambar Jabu secara cepat
+            dan transparan.
           </p>
         </div>
       </div>
 
-      {/* RIGHT LOGIN FORM */}
+      {/* ======== KANAN: FORM LOGIN ======== */}
       <div className="flex items-center justify-center p-6 sm:p-10 bg-background">
-        <form onSubmit={submit} className="ds-card w-full max-w-md p-6 sm:p-8">
-          <h2 className="text-2xl font-semibold">Masuk</h2>
-          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-            Masukkan <b>Username dan Password Anda</b>.
+        <form
+          onSubmit={handleSubmit}
+          className="ds-card w-full max-w-md p-6 sm:p-8 shadow-lg rounded-xl border border-[hsl(var(--muted))]"
+        >
+          <h2 className="text-2xl font-semibold text-center">Masuk</h2>
+          <p className="text-sm text-[hsl(var(--muted-foreground))] text-center mt-1">
+            Gunakan akun yang sudah terdaftar.
           </p>
+
           <div className="mt-6 space-y-4">
             <div>
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="login">Email atau Nama</Label>
               <Input
-                id="username"
-                name="username"
-                placeholder="username"
+                id="login"
+                name="login"
+                type="text"
+                placeholder="pegawai@smpj.local atau Willy"
                 autoComplete="username"
+                required
+                value={login}
+                onChange={(e) => setLogin(e.target.value)}
               />
             </div>
             <div>
@@ -109,16 +143,27 @@ export default function Login() {
                 id="password"
                 name="password"
                 type="password"
-                placeholder="password"
+                placeholder="********"
                 autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
               />
             </div>
-            <Button type="submit" className="w-full">
-              Masuk
+            <Button
+              type="submit"
+              className="w-full mt-4 ds-btn ds-btn-primary font-medium"
+              disabled={loading}
+            >
+              {loading ? "Memproses..." : "Masuk"}
             </Button>
           </div>
+
+          <p className="text-xs text-center text-[hsl(var(--muted-foreground))] mt-6">
+            © 2025 SMPJ — Jambar Jabu. All rights reserved.
+          </p>
         </form>
       </div>
     </div>
-  )
+  );
 }

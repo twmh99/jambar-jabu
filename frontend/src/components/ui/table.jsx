@@ -14,9 +14,22 @@ export const THead = ({ children }) => (
   </thead>
 );
 
-export const TBody = ({ children }) => <tbody className="divide-y divide-[hsl(var(--border))]">{children}</tbody>;
+export const TBody = ({ children }) => (
+  <tbody className="divide-y divide-[hsl(var(--border))]">{children}</tbody>
+);
 
-export const TR = ({ children }) => <tr className="hover:bg-[hsl(var(--muted)/0.4)]">{children}</tr>;
+export const TR = ({ children, className = '', onClick }) => (
+  <tr
+    onClick={onClick}
+    className={[
+      "hover:bg-[hsl(var(--muted)/0.4)] transition",
+      onClick ? "cursor-pointer" : "",
+      className,
+    ].join(' ')}
+  >
+    {children}
+  </tr>
+);
 
 export const TH = ({ children, className = '' }) => (
   <th className={["text-left font-medium px-4 py-2", className].join(' ')}>{children}</th>

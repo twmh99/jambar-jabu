@@ -1,121 +1,134 @@
-import React from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
-import { Button } from '../../components/ui/button'
-import { Table, TBody, THead, TH, TR, TD } from '../../components/ui/table'
-import { Input, Label, Select } from '../../components/ui/input'
-import { toast } from '../../components/ui/toast'
-import Modal from '../../components/common/Modal'
-import ConfirmDeleteModal from '../../components/ui/ConfirmDeleteModal'
-import api from '../../lib/api'
+// ...imports tetap
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { Button } from '../../components/ui/button';
+import { Table, TBody, THead, TH, TR, TD } from '../../components/ui/table';
+import { Input, Label, Select } from '../../components/ui/input';
+import { toast } from '../../components/ui/toast';
+import Modal from '../../components/common/Modal';
+import ConfirmDeleteModal from '../../components/ui/ConfirmDeleteModal';
+import api from '../../services/api';
 
 export default function Employees() {
-  const [rows, setRows] = React.useState([])
-  const [open, setOpen] = React.useState(false)
-  const [edit, setEdit] = React.useState(null)
-  const [q, setQ] = React.useState('')
-  const [page, setPage] = React.useState(1)
-  const pageSize = 8
-  const [sortKey, setSortKey] = React.useState('nama')
-  const [sortAsc, setSortAsc] = React.useState(true)
+  const [rows, setRows] = React.useState([]);
+  const [open, setOpen] = React.useState(false);
+  const [edit, setEdit] = React.useState(null);
+  const [q, setQ] = React.useState('');
+  const [page, setPage] = React.useState(1);
+  const pageSize = 8;
+  const [sortKey, setSortKey] = React.useState('nama');
+  const [sortAsc, setSortAsc] = React.useState(true);
+  const [showDelete, setShowDelete] = React.useState(false);
+  const [deleteTarget, setDeleteTarget] = React.useState(null);
+  const [detailOpen, setDetailOpen] = React.useState(false);
+  const [selectedPegawai, setSelectedPegawai] = React.useState(null);
 
-  // 🔥 Tambahan: modal konfirmasi hapus
-  const [showDelete, setShowDelete] = React.useState(false)
-  const [deleteTarget, setDeleteTarget] = React.useState(null)
-
-  /* ======================================================
-     🚀 Load Data Pegawai
-  ====================================================== */
   const load = async () => {
     try {
-      const res = await api.get('employees')
-      setRows(res.data)
-    } catch {
-      toast.error('Gagal memuat data pegawai')
+      const res = await api.get('/pegawai');
+      const data = Array.isArray(res.data)
+        ? res.data
+        : Array.isArray(res.data?.data)
+        ? res.data.data
+        : [];
+      setRows(data);
+    } catch (err) {
+      console.error('Load error:', err.response?.data || err.message);
+      toast.error('Gagal memuat data pegawai. Pastikan Anda sudah login.');
     }
-  }
-  React.useEffect(() => { load() }, [])
+  };
 
-  /* ======================================================
-     🔎 Filter + Sorting + Paging
-  ====================================================== */
-  const filtered = rows
-    .filter(r => {
-      const s = q.toLowerCase()
-      return [r.nama, r.jabatan, r.telepon, r.status].some(v => (v || '').toLowerCase().includes(s))
-    })
-    .sort((a, b) => {
-      const av = (a[sortKey] || '').toString().toLowerCase()
-      const bv = (b[sortKey] || '').toString().toLowerCase()
-      if (av < bv) return sortAsc ? -1 : 1
-      if (av > bv) return sortAsc ? 1 : -1
-      return 0
-    })
+  React.useEffect(() => { load(); }, []);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize))
-  const paged = filtered.slice((page - 1) * pageSize, page * pageSize)
+  const showDetail = async (pegawai) => {
+    try {
+      const res = await api.get(`/pegawai/${pegawai.id}`);
+      const data = res.data?.data || pegawai;
+      setSelectedPegawai(data);
+      setDetailOpen(true);
+    } catch (err) {
+      console.error('Gagal load detail:', err);
+      toast.error('Gagal memuat detail pegawai.');
+      setSelectedPegawai(pegawai);
+      setDetailOpen(true);
+    }
+  };
 
-  const changeSort = (key) => {
-    if (sortKey === key) setSortAsc(!sortAsc)
-    else { setSortKey(key); setSortAsc(true) }
-  }
-
-  /* ======================================================
-     💾 Simpan Data (Tambah / Ubah)
-  ====================================================== */
   const save = async (e) => {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    const data = Object.fromEntries(fd.entries())
-
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const data = Object.fromEntries(fd.entries());
     if (!data.nama || !data.jabatan || !data.telepon) {
-      toast.error('Lengkapi nama/jabatan/telepon')
-      return
+      toast.error('Lengkapi nama, jabatan, dan telepon.');
+      return;
     }
-
     try {
       if (edit !== null) {
-        await api.put(`employees/${rows[edit].id}`, data)
-        toast.success('Data pegawai diperbarui')
+        await api.put(`/pegawai/${rows[edit].id}`, data);
+        toast.success('Data pegawai diperbarui.');
       } else {
-        await api.post('employees', data)
-        toast.success('Data pegawai disimpan')
+        await api.post('/pegawai', data);
+        toast.success('Pegawai baru berhasil ditambahkan.');
       }
-      setOpen(false)
-      setEdit(null)
-      await load()
-    } catch {
-      toast.error('Gagal menyimpan data pegawai')
+      setOpen(false);
+      setEdit(null);
+      await load();
+    } catch (err) {
+      console.error('Save error:', err.response?.data || err.message);
+      const msg = err.response?.data?.message || 'Gagal menyimpan data pegawai.';
+      toast.error(msg);
     }
-  }
+  };
 
-  /* ======================================================
-     🗑️ Konfirmasi & Hapus Data
-  ====================================================== */
   const confirmRemove = (idx) => {
-    setDeleteTarget(idx)
-    setShowDelete(true)
-  }
+    setDeleteTarget(idx);
+    setShowDelete(true);
+  };
 
   const handleDeleteConfirm = async () => {
-    const idx = deleteTarget
-    if (idx == null) return
+    const idx = deleteTarget;
+    if (idx == null) return;
     try {
-      await api.delete(`employees/${rows[idx].id}`)
-      toast.info(`Pegawai "${rows[idx].nama}" berhasil dihapus.`)
-      setShowDelete(false)
-      await load()
-    } catch {
-      toast.error('Gagal menghapus data pegawai')
+      await api.delete(`/pegawai/${rows[idx].id}`);
+      toast.info(`Pegawai "${rows[idx].nama}" berhasil dihapus.`);
+      setShowDelete(false);
+      await load();
+    } catch (err) {
+      console.error('Delete error:', err);
+      toast.error('Gagal menghapus data pegawai.');
     }
-  }
+  };
 
-  /* ======================================================
-     🖼️ Render
-  ====================================================== */
+  const filtered = Array.isArray(rows)
+    ? rows
+        .filter((r) => {
+          const s = q.toLowerCase();
+          return [r.nama, r.jabatan, r.telepon, r.status].some((v) =>
+            (v || '').toLowerCase().includes(s)
+          );
+        })
+        .sort((a, b) => {
+          const av = (a[sortKey] || '').toString().toLowerCase();
+          const bv = (b[sortKey] || '').toString().toLowerCase();
+          if (av < bv) return sortAsc ? -1 : 1;
+          if (av > bv) return sortAsc ? 1 : -1;
+          return 0;
+        })
+    : [];
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+
+  const changeSort = (key) => {
+    if (sortKey === key) setSortAsc(!sortAsc);
+    else {
+      setSortKey(key);
+      setSortAsc(true);
+    }
+  };
+
   return (
     <div className="space-y-6">
-
-      {/* 🔔 Modal Konfirmasi Hapus */}
       <ConfirmDeleteModal
         open={showDelete}
         onCancel={() => setShowDelete(false)}
@@ -130,15 +143,24 @@ export default function Employees() {
             <Input
               placeholder="Cari nama/jabatan/telepon..."
               value={q}
-              onChange={e => { setQ(e.target.value); setPage(1) }}
+              onChange={(e) => {
+                setQ(e.target.value);
+                setPage(1);
+              }}
               className="w-64"
             />
-            <Button variant="accent" onClick={() => { setEdit(null); setOpen(true) }}>
-              <i className="fa-solid fa-user-plus mr-2" />Tambah
+            <Button
+              variant="accent"
+              onClick={() => {
+                setEdit(null);
+                setOpen(true);
+              }}
+            >
+              <i className="fa-solid fa-user-plus mr-2" />
+              Tambah
             </Button>
           </div>
         </CardHeader>
-
         <CardContent>
           <Table>
             <THead>
@@ -146,18 +168,19 @@ export default function Employees() {
                 <TH className="cursor-pointer" onClick={() => changeSort('nama')}>
                   Nama {sortKey === 'nama' ? (sortAsc ? '▲' : '▼') : ''}
                 </TH>
-                <TH className="cursor-pointer" onClick={() => changeSort('jabatan')}>
-                  Jabatan {sortKey === 'jabatan' ? (sortAsc ? '▲' : '▼') : ''}
-                </TH>
+                <TH>Jabatan</TH>
                 <TH>Telepon</TH>
                 <TH>Status</TH>
                 <TH className="text-right">Aksi</TH>
               </TR>
             </THead>
-
             <TBody>
               {paged.map((r, idx) => (
-                <TR key={r.id} className="hover:bg-[hsl(var(--muted)/0.2)] transition">
+                <TR
+                  key={r.id}
+                  onClick={() => showDetail(r)}
+                  className="hover:bg-[hsl(var(--muted)/0.2)] transition cursor-pointer"
+                >
                   <TD>{r.nama}</TD>
                   <TD>{r.jabatan}</TD>
                   <TD>{r.telepon}</TD>
@@ -175,14 +198,21 @@ export default function Employees() {
                   <TD className="text-right">
                     <div className="flex justify-end gap-2">
                       <button
-                        onClick={() => { setEdit((page - 1) * pageSize + idx); setOpen(true) }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEdit((page - 1) * pageSize + idx);
+                          setOpen(true);
+                        }}
                         className="px-2 py-1 rounded-md text-sm text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))] transition"
                         title="Edit pegawai"
                       >
                         <i className="fa-solid fa-pen" />
                       </button>
                       <button
-                        onClick={() => confirmRemove((page - 1) * pageSize + idx)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          confirmRemove((page - 1) * pageSize + idx);
+                        }}
                         className="px-2 py-1 rounded-md text-sm text-[hsl(var(--destructive))] hover:bg-[hsl(var(--muted))] transition"
                         title="Hapus pegawai"
                       >
@@ -201,31 +231,35 @@ export default function Employees() {
               )}
             </TBody>
           </Table>
-
-          {/* 🔄 Pagination */}
-          <div className="flex items-center justify-end gap-2 mt-4">
-            <button
-              className="ds-btn ds-btn-outline"
-              disabled={page === 1}
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-            >
-              Prev
-            </button>
-            <div className="text-sm text-[hsl(var(--muted-foreground))]">
-              Hal {page} / {totalPages}
-            </div>
-            <button
-              className="ds-btn ds-btn-outline"
-              disabled={page === totalPages}
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            >
-              Next
-            </button>
-          </div>
         </CardContent>
       </Card>
 
-      {/* 🧾 Modal Tambah / Ubah Pegawai */}
+      {/* Detail */}
+      {detailOpen && selectedPegawai && (
+        <Modal open={detailOpen} title="Detail Pegawai" onClose={() => setDetailOpen(false)}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+            <div><strong>Nama:</strong> {selectedPegawai.nama}</div>
+            <div><strong>Jabatan:</strong> {selectedPegawai.jabatan}</div>
+            <div><strong>Telepon:</strong> {selectedPegawai.telepon}</div>
+            <div><strong>Status:</strong> {selectedPegawai.status}</div>
+            <div><strong>Email:</strong> {selectedPegawai.email || '-'}</div>
+            <div>
+              <strong>Role:</strong>{' '}
+              {selectedPegawai.role === 'owner'
+                ? 'Owner'
+                : selectedPegawai.role === 'supervisor'
+                ? 'Supervisor'
+                : 'Pegawai'}
+            </div>
+            <div>
+              <strong>Tarif/Jam:</strong> Rp{' '}
+              {new Intl.NumberFormat('id-ID').format(selectedPegawai.hourly_rate || 0)}
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Form Tambah/Ubah */}
       <Modal
         open={open}
         title={edit !== null ? 'Ubah Pegawai' : 'Tambah Pegawai'}
@@ -245,6 +279,26 @@ export default function Employees() {
             <Input name="telepon" defaultValue={edit !== null ? rows[edit].telepon : ''} required />
           </div>
           <div>
+            <Label>Email (Login)</Label>
+            <Input
+              type="email"
+              name="email"
+              placeholder="contoh: pegawai@email.com"
+              defaultValue={edit !== null ? rows[edit].email || '' : ''}
+            />
+          </div>
+          <div>
+            <Label>Role</Label>
+            <Select
+              name="role"
+              defaultValue={edit !== null ? rows[edit].role || 'employee' : 'employee'}
+            >
+              <option value="employee">Pegawai</option>
+              <option value="supervisor">Supervisor</option>
+              <option value="owner">Owner</option>
+            </Select>
+          </div>
+          <div>
             <Label>Status</Label>
             <Select name="status" defaultValue={edit !== null ? rows[edit].status : 'Aktif'}>
               <option>Aktif</option>
@@ -262,11 +316,7 @@ export default function Employees() {
             />
           </div>
           <div className="sm:col-span-2 flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              className="ds-btn ds-btn-outline"
-              onClick={() => setOpen(false)}
-            >
+            <button type="button" className="ds-btn ds-btn-outline" onClick={() => setOpen(false)}>
               Batal
             </button>
             <Button type="submit">Simpan</Button>
@@ -274,5 +324,5 @@ export default function Employees() {
         </form>
       </Modal>
     </div>
-  )
+  );
 }

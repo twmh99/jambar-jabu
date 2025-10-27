@@ -2,14 +2,14 @@ import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Table, TBody, THead, TH, TR, TD } from "../../components/ui/table";
 import { toast } from "../../components/ui/toast";
-import api from "../../lib/api";
+import api from "../../services/api";
 
 export default function AbsensiPegawai() {
   const [rows, setRows] = React.useState([]);
 
   const load = async () => {
     try {
-      const res = await api.get("attendance/today");
+      const res = await api.get("absensi/today");
       setRows(res.data);
     } catch {
       toast.error("Gagal memuat data absensi");

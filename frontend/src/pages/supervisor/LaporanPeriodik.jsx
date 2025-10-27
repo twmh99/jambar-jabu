@@ -2,14 +2,14 @@ import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { toast } from "../../components/ui/toast";
-import api from "../../lib/api";
+import api from "../../services/api";
 
 export default function LaporanPeriodik() {
   const [data, setData] = React.useState([]);
 
   const load = async () => {
     try {
-      const res = await api.get("attendance/report/weekly");
+      const res = await api.get("absensi/report/weekly");
       setData(res.data);
     } catch {
       toast.error("Gagal memuat laporan");

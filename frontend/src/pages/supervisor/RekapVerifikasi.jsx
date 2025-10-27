@@ -3,14 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Table, TBody, THead, TH, TR, TD } from "../../components/ui/table";
 import { Button } from "../../components/ui/button";
 import { toast } from "../../components/ui/toast";
-import api from "../../lib/api";
+import api from "../../services/api";
 
 export default function RekapVerifikasi() {
   const [pending, setPending] = React.useState([]);
 
   const load = async () => {
     try {
-      const res = await api.get("attendance/pending");
+      const res = await api.get("absensi/pending");
       setPending(res.data);
     } catch {
       toast.error("Gagal memuat absensi tertunda");
@@ -23,7 +23,7 @@ export default function RekapVerifikasi() {
 
   const verify = async (id) => {
     try {
-      await api.post(`attendance/verify/${id}`);
+      await api.post(`absensi/verify/${id}`);
       toast.success("Absensi diverifikasi");
       await load();
     } catch {
