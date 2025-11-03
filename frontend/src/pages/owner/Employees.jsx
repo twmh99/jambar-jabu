@@ -1,4 +1,3 @@
-// ...imports tetap
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -42,7 +41,7 @@ export default function Employees() {
 
   const showDetail = async (pegawai) => {
     try {
-      const res = await api.get(`/pegawai/${pegawai.id}`);
+      const res = await api.get(`/pegawai/profil/${pegawai.id}`);
       const data = res.data?.data || pegawai;
       setSelectedPegawai(data);
       setDetailOpen(true);
@@ -203,20 +202,23 @@ export default function Employees() {
                           setEdit((page - 1) * pageSize + idx);
                           setOpen(true);
                         }}
-                        className="px-2 py-1 rounded-md text-sm text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))] transition"
-                        title="Edit pegawai"
+                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-yellow-50 hover:text-yellow-600 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-[#1e293b]/80 dark:hover:text-yellow-400 transition-all duration-200"
+                        title="Edit Pegawai"
                       >
-                        <i className="fa-solid fa-pen" />
+                        <i className="fa-solid fa-pen text-yellow-500" />
+                        <span>Edit</span>
                       </button>
+
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           confirmRemove((page - 1) * pageSize + idx);
                         }}
-                        className="px-2 py-1 rounded-md text-sm text-[hsl(var(--destructive))] hover:bg-[hsl(var(--muted))] transition"
-                        title="Hapus pegawai"
+                        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-red-50 hover:text-red-600 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-[#0f172a]/80 dark:hover:text-red-400 transition-all duration-200"
+                        title="Hapus Pegawai"
                       >
-                        <i className="fa-solid fa-trash" />
+                        <i className="fa-solid fa-trash text-red-500" />
+                        <span>Hapus</span>
                       </button>
                     </div>
                   </TD>

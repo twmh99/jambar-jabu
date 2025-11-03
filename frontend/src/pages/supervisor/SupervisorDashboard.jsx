@@ -163,15 +163,16 @@ export default function SupervisorDashboard() {
         <Button variant="accent" onClick={() => setModalAdd(true)}>
           <i className="fa-solid fa-plus mr-2" /> Buat Jadwal Baru
         </Button>
-        <Button
-          variant="outline"
+        <button
           onClick={() => {
             setModalVerify(true);
             loadPendingVerify();
           }}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-600 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-[#1e293b]/80 dark:hover:text-emerald-300 transition-all duration-200"
         >
-          <i className="fa-regular fa-clipboard-check mr-2" /> Verifikasi Absensi
-        </Button>
+          <i className="fa-solid fa-circle-check text-green-500 dark:text-emerald-400 text-base" />
+          <span>Verifikasi Absensi</span>
+        </button>
       </div>
 
       {/* ===== SUMMARY ===== */}
@@ -323,9 +324,14 @@ export default function SupervisorDashboard() {
                 <TD>{p.waktu}</TD>
                 <TD>{p.status}</TD>
                 <TD>
-                  <Button variant="accent" onClick={() => verifyAttendance(p.id)} className="text-sm">
-                    <i className="fa-solid fa-check mr-1" /> Verifikasi
-                  </Button>
+                <button
+                  onClick={() => verifyAttendance(p.id)}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-green-100 hover:shadow-md hover:shadow-emerald-200/40 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-[#1e293b]/80 dark:hover:shadow-emerald-400/30 dark:hover:text-emerald-300 transition-all duration-300"
+                  title="Verifikasi Absensi"
+                >
+                  <i className="fa-solid fa-circle-check text-green-500 dark:text-emerald-400" />
+                  <span>Verifikasi</span>
+                </button>
                 </TD>
               </TR>
             ))}

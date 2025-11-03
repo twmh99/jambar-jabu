@@ -14,6 +14,7 @@ import Login from "./pages/Login";
 
 // ==== Owner Pages ====
 import OwnerDashboard from "./pages/owner/OwnerDashboard";
+import JadwalKerjaOwner from "./pages/owner/JadwalKerja";
 import Employees from "./pages/owner/Employees";
 import Analytics from "./pages/owner/Analytics";
 import AttendanceReport from "./pages/owner/AttendanceReport";
@@ -56,6 +57,7 @@ export default function App() {
         >
           <Route index element={<OwnerDashboard />} />
           <Route path="dashboard" element={<OwnerDashboard />} />
+          <Route path="jadwal" element={<JadwalKerjaOwner />} />
           <Route path="employees" element={<Employees />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="attendance" element={<AttendanceReport />} />

@@ -12,6 +12,7 @@ const navByRole = {
   owner: [
     { to: "/owner/dashboard", label: "Dashboard", icon: "fa-solid fa-gauge" },
     { to: "/owner/employees", label: "Data Pegawai", icon: "fa-solid fa-users" },
+    { to: "/owner/jadwal", label: "Jadwal Kerja", icon: "fa-solid fa-clock" },
     { to: "/owner/attendance", label: "Laporan Absensi", icon: "fa-solid fa-calendar-check" },
     { to: "/owner/payroll", label: "Laporan Gaji & Tip", icon: "fa-solid fa-money-bill-wave" },
     { to: "/owner/analytics", label: "Analisis Kinerja", icon: "fa-solid fa-chart-line" },
@@ -41,7 +42,6 @@ export default function MainLayout() {
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "auto");
   const [activeTheme, setActiveTheme] = useState("light");
 
-  // 🌓 Deteksi preferensi sistem
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
     const updateTheme = () => {
@@ -74,7 +74,6 @@ export default function MainLayout() {
     }
   };
 
-  // 🌗 Switch manual tema
   const toggleTheme = () => {
     const next = theme === "light" ? "dark" : theme === "dark" ? "auto" : "light";
     setTheme(next);
@@ -83,29 +82,37 @@ export default function MainLayout() {
 
   return (
     <div
-      className={`min-h-screen w-full flex flex-col font-[SF Pro Display,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif] transition-colors duration-700 ${
+      className={`relative min-h-screen w-full flex flex-col font-[SF Pro Display,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,Cantarell,sans-serif] transition-colors duration-700 ${
         activeTheme === "dark"
           ? "bg-gradient-to-br from-[#0f2027] via-[#203a43] to-[#2c5364] text-gray-100"
           : "bg-gradient-to-br from-[#ecf5ff] via-[#f7f9fc] to-[#e0f7fa] text-gray-800"
       }`}
     >
-      {/* 🌈 Efek Aurora Background */}
-      <div className="absolute inset-0 -z-10 overflow-hidden">
-        <div
-          className={`absolute top-[-10%] left-[-15%] w-[70vw] h-[70vw] rounded-full blur-3xl opacity-25 animate-float-slow ${
-            activeTheme === "dark"
-              ? "bg-gradient-to-r from-[#22d3ee]/40 to-[#818cf8]/40"
-              : "bg-gradient-to-r from-[#7dd3fc]/40 to-[#c084fc]/30"
-          }`}
-        />
-        <div
-          className={`absolute bottom-[-20%] right-[-15%] w-[60vw] h-[60vw] rounded-full blur-3xl opacity-25 animate-float ${
-            activeTheme === "dark"
-              ? "bg-gradient-to-tr from-[#0ea5e9]/40 to-[#67e8f9]/40"
-              : "bg-gradient-to-tr from-[#bae6fd]/40 to-[#e0f2fe]/40"
-          }`}
-        />
-      </div>
+{/* 🌈 Efek Aurora Background */}
+<div className="aurora-wrapper fixed inset-0 -z-10 overflow-hidden">
+  <div
+    className={`absolute top-[-20%] left-[-10%] w-[80vw] h-[80vw] rounded-full blur-3xl opacity-30 animate-float-slow ${
+      activeTheme === "dark"
+        ? "bg-gradient-to-r from-[#22d3ee]/40 to-[#818cf8]/40"
+        : "bg-gradient-to-r from-[#7dd3fc]/40 to-[#c084fc]/30"
+    }`}
+  />
+  <div
+    className={`absolute bottom-[-15%] right-[-10%] w-[70vw] h-[70vw] rounded-full blur-3xl opacity-30 animate-float ${
+      activeTheme === "dark"
+        ? "bg-gradient-to-tr from-[#0ea5e9]/40 to-[#67e8f9]/40"
+        : "bg-gradient-to-tr from-[#bae6fd]/40 to-[#e0f2fe]/40"
+    }`}
+  />
+  {/* Lapisan gradien halus di atas agar tidak ada “warna tanggung” */}
+  <div
+    className={`absolute top-0 left-0 w-full h-[30vh] bg-gradient-to-b ${
+      activeTheme === "dark"
+        ? "from-[#0f172a]/95 to-transparent"
+        : "from-[#e0f2fe]/70 to-transparent"
+    }`}
+  />
+</div>
 
       <ToastViewport />
       <ConfirmLogoutModal
@@ -119,7 +126,7 @@ export default function MainLayout() {
       <header
         className={`sticky top-0 z-50 backdrop-blur-xl border-b shadow-sm transition-all duration-700 ${
           activeTheme === "dark"
-            ? "bg-[#1e293b]/60 border-gray-700"
+            ? "bg-[#1e293b]/70 border-gray-700"
             : "bg-white/70 border-gray-200"
         }`}
       >
@@ -143,7 +150,7 @@ export default function MainLayout() {
                 activeTheme === "dark" ? "text-gray-100" : "text-gray-800"
               }`}
             >
-              SMPJ • Jambar Jabu
+              SMPJ | Jambar Jabu
             </h1>
           </button>
 
@@ -160,10 +167,18 @@ export default function MainLayout() {
               title={`Ubah tema (${theme})`}
             >
               <div
-                className={`absolute w-6 h-6 rounded-full bg-white shadow-md transform transition-all duration-500 ${
-                  activeTheme === "dark" ? "translate-x-7" : "translate-x-1"
+                className={`absolute w-6 h-6 rounded-full bg-white shadow-md transform transition-all duration-500 flex items-center justify-center text-[12px] ${
+                  activeTheme === "dark"
+                    ? "translate-x-7 text-yellow-300"
+                    : "translate-x-1 text-blue-500"
                 }`}
-              />
+              >
+                <i
+                  className={`fa-solid ${
+                    activeTheme === "dark" ? "fa-moon" : "fa-sun"
+                  }`}
+                />
+              </div>
             </button>
 
             <span
@@ -242,7 +257,7 @@ export default function MainLayout() {
             : "border-gray-200 text-gray-500 bg-white/50"
         }`}
       >
-        © {new Date().getFullYear()} SMPJ • Jambar Jabu — Sistem Manajemen Pegawai & Jadwal
+        © {new Date().getFullYear()} SMPJ | Jambar Jabu — Sistem Manajemen Pegawai & Jadwal
       </footer>
     </div>
   );

@@ -111,3 +111,283 @@
   opacity: 0.3;
   animation: auroraFloat 12s ease-in-out infinite alternate;
 }
+
+/* ==========================================================
+   🗑️ Ikon Tong Sampah — Selalu Merah di Semua Kondisi
+   ========================================================== */
+.fa-trash,
+button i.fa-trash {
+  color: #ef4444 !important; /* selalu merah */
+  transition: color 0.3s ease, transform 0.2s;
+}
+
+.fa-trash:hover,
+button:hover i.fa-trash {
+  color: #dc2626 !important; /* merah lebih gelap saat hover */
+  transform: scale(1.1);
+}
+
+button:disabled i.fa-trash {
+  opacity: 0.6;
+  color: #f87171 !important; /* lebih lembut saat nonaktif */
+}
+
+/* ==========================================================
+   ✏️ Ikon Edit — Kuning permanen di Mode Gelap
+   ========================================================== */
+.dark .fa-pen,
+.dark button i.fa-pen {
+  color: #facc15 !important; /* kuning terang (yellow-400) */
+  transition: color 0.3s ease, transform 0.2s;
+}
+
+.dark .fa-pen:hover,
+.dark button:hover i.fa-pen {
+  color: #fde047 !important; /* kuning lebih muda saat hover */
+  transform: scale(1.1);
+}
+
+/* Mode terang tetap warna default (abu gelap) */
+.light .fa-pen,
+.light button i.fa-pen {
+  color: #1f2937 !important; /* abu gelap */
+}
+
+/* Overlay modal */
+.modal-backdrop {
+  @apply fixed inset-0 bg-black/50 flex items-center justify-center z-50;
+}
+
+/* Kontainer modal */
+.modal-container {
+  @apply bg-[hsl(var(--card))] text-[hsl(var(--foreground))] rounded-2xl p-6 shadow-2xl border border-[hsl(var(--border))] transition-all duration-300;
+}
+
+/* Mode terang */
+:root {
+  --background: 210 40% 97%;
+  --foreground: 220 20% 15%;
+  --card: 0 0% 100%;
+  --muted: 220 20% 88%;
+}
+
+/* Mode gelap */
+.dark {
+  --background: 220 35% 12%;
+  --foreground: 0 0% 95%;
+  --card: 220 30% 16%;
+  --muted: 220 15% 25%;
+}
+
+/* Overlay modal */
+.modal-backdrop {
+  @apply fixed inset-0 z-40 flex items-center justify-center;
+  background: rgba(15, 23, 42, 0.4); /* abu transparan */
+  backdrop-filter: blur(6px);        /* blur lembut */
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.fa-pen:hover,
+.fa-trash:hover {
+  transform: scale(1.1);
+}
+
+/* =========================================
+   🌫️ Modal Overlay Blur Halus
+========================================= */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.35); /* abu gelap transparan */
+  backdrop-filter: blur(8px);          /* efek blur lembut */
+  -webkit-backdrop-filter: blur(8px);
+  transition: all 0.3s ease-in-out;
+}
+
+/* Kontainer modal */
+.modal-container {
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border-radius: 1rem;
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.3);
+  padding: 2rem;
+  max-width: 600px;
+  width: 90%;
+  transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+}
+
+/* =============================================
+   🌫️ Perbaikan Overlay Modal & Background Hitam
+============================================= */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;                 /* full cover seluruh layar */
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.45); /* abu gelap transparan */
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+.modal-container {
+  background-color: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border-radius: 1rem;
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.3);
+  padding: 2rem;
+  max-width: 640px;
+  width: 90%;
+  animation: modalFadeIn 0.25s ease-out;
+}
+
+/* ✨ animasi lembut muncul */
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================================================
+   🎨 GLOBAL BUTTON UTILITIES — SMPJ System (by Willy)
+   Konsisten di semua halaman (Edit / Delete / Verify)
+   ============================================================ */
+
+/* Tombol dasar */
+.btn-base {
+  @apply inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium border transition-all duration-300;
+  border-radius: 0.75rem; /* rounded-xl */
+}
+
+/* ========================================
+   ✏️ Edit Button (kuning)
+======================================== */
+.btn-edit {
+  @apply btn-base border-gray-300 text-gray-700 hover:bg-yellow-50 hover:text-yellow-600
+         dark:border-gray-600 dark:text-gray-200 dark:hover:bg-[#1e293b]/80 dark:hover:text-yellow-400;
+}
+
+.btn-edit i {
+  color: #facc15; /* yellow-400 */
+  transition: color 0.3s ease;
+}
+
+.dark .btn-edit i {
+  color: #fde047; /* lighter yellow for dark mode */
+}
+
+/* ========================================
+   🗑️ Delete Button (merah)
+======================================== */
+.btn-delete {
+  @apply btn-base border-gray-300 text-gray-700 hover:bg-red-50 hover:text-red-600
+         dark:border-gray-600 dark:text-gray-200 dark:hover:bg-[#0f172a]/80 dark:hover:text-red-400;
+}
+
+.btn-delete i {
+  color: #ef4444; /* red-500 */
+  transition: color 0.3s ease;
+}
+
+.dark .btn-delete i {
+  color: #f87171; /* red-400 for dark mode */
+}
+
+/* ========================================
+   ✅ Verify Button (hijau)
+======================================== */
+.btn-verify {
+  @apply btn-base border-gray-300 text-gray-700 hover:bg-green-100 hover:shadow-md hover:shadow-emerald-200/40
+         dark:border-gray-600 dark:text-gray-200 dark:hover:bg-[#1e293b]/80 dark:hover:shadow-emerald-400/30 dark:hover:text-emerald-300;
+}
+
+.btn-verify i {
+  color: #22c55e; /* green-500 */
+  transition: color 0.3s ease;
+}
+
+.dark .btn-verify i {
+  color: #34d399; /* emerald-400 for dark mode */
+}
+
+/* Tombol utama (aksen biru iOS-style) */
+.btn-primary {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 font-medium text-sm rounded-xl transition-all duration-300;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.35);
+  transform: translateY(-1px);
+}
+
+.dark .btn-primary {
+  background: linear-gradient(135deg, #60a5fa, #3b82f6);
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.25);
+}
+
+.dark .btn-primary:hover {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  box-shadow: 0 3px 10px rgba(59, 130, 246, 0.35);
+}
+
+/* Tombol outline (Batal / Kembali / Sekunder) */
+.btn-outline {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 font-medium text-sm rounded-xl border transition-all duration-300;
+  border-color: hsl(var(--border));
+  color: hsl(var(--foreground));
+  background: transparent;
+}
+
+.btn-outline:hover {
+  background-color: hsl(var(--muted));
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary));
+}
+
+.dark .btn-outline:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: #93c5fd;
+}
+
+/* Tombol aksen hijau terang (opsional: sukses) */
+.btn-success {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 font-medium text-sm rounded-xl transition-all duration-300;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: white;
+  box-shadow: 0 2px 6px rgba(22, 163, 74, 0.25);
+}
+
+.btn-success:hover {
+  background: linear-gradient(135deg, #16a34a, #15803d);
+  box-shadow: 0 3px 10px rgba(22, 163, 74, 0.35);
+  transform: translateY(-1px);
+}
+
+/* Tombol netral abu-abu (misalnya: “Tutup”, “Lewati”) */
+.btn-neutral {
+  @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 font-medium text-sm rounded-xl transition-all duration-300;
+  background-color: hsl(var(--muted));
+  color: hsl(var(--foreground));
+}
+
+.btn-neutral:hover {
+  background-color: hsl(var(--border));
+  transform: translateY(-1px);
+}

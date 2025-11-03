@@ -130,7 +130,7 @@ export default function Login() {
                 id="login"
                 name="login"
                 type="text"
-                placeholder="pegawai@smpj.local atau Willy"
+                placeholder="Masukkan Email atau Username"
                 autoComplete="username"
                 required
                 value={login}

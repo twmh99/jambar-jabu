@@ -5,11 +5,10 @@ import { Table, TBody, THead, TH, TR, TD } from "../../components/ui/table";
 import { Input, Label } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import Modal from "../../components/common/Modal";
-import ActionButtons from "../../components/ui/ActionButtons";
 import { toast } from "../../components/ui/toast";
 import api from "../../services/api";
 
-export default function JadwalKerja() {
+export default function JadwalKerjaOwner() {
   const [rows, setRows] = React.useState([]);
   const [employees, setEmployees] = React.useState([]);
   const [selectedEmployee, setSelectedEmployee] = React.useState(null);
@@ -18,14 +17,12 @@ export default function JadwalKerja() {
   const [modalEdit, setModalEdit] = React.useState(false);
   const [q, setQ] = React.useState("");
 
-  // Waktu shift otomatis
   const shiftTimes = {
     Pagi: { jam_mulai: "09:00", jam_selesai: "14:00" },
     Siang: { jam_mulai: "14:00", jam_selesai: "19:00" },
     Malam: { jam_mulai: "19:00", jam_selesai: "00:00" },
   };
 
-  // Load jadwal mingguan
   const load = async () => {
     try {
       const res = await api.get("/jadwal/week");
@@ -35,7 +32,6 @@ export default function JadwalKerja() {
     }
   };
 
-  // Load pegawai untuk dropdown
   const loadEmployees = async () => {
     try {
       const res = await api.get("/pegawai");
@@ -56,7 +52,6 @@ export default function JadwalKerja() {
     loadEmployees();
   }, []);
 
-  // ➕ Tambah jadwal baru
   const createSchedule = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -78,7 +73,6 @@ export default function JadwalKerja() {
       await api.post("/jadwal", payload);
       toast.success("Jadwal berhasil dibuat");
       setModalAdd(false);
-      setSelectedEmployee(null);
       await load();
     } catch (err) {
       console.error(err);
@@ -86,7 +80,6 @@ export default function JadwalKerja() {
     }
   };
 
-  // ✏️ Edit jadwal
   const updateSchedule = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -104,14 +97,12 @@ export default function JadwalKerja() {
       await api.put(`/jadwal/${selectedEdit.id}`, payload);
       toast.success("Jadwal berhasil diperbarui");
       setModalEdit(false);
-      setSelectedEdit(null);
       await load();
     } catch (err) {
       toast.error(err?.response?.data?.message || "Gagal memperbarui jadwal");
     }
   };
 
-  // 🗑️ Hapus jadwal
   const deleteSchedule = async (id) => {
     if (!confirm("Yakin ingin menghapus jadwal ini?")) return;
     try {
@@ -123,17 +114,17 @@ export default function JadwalKerja() {
     }
   };
 
-  // 🔍 Filter pencarian
   const filtered = rows.filter((r) =>
-    [r.nama, r.shift, r.tanggal]
-      .some((v) => (v || "").toLowerCase().includes(q.toLowerCase()))
+    [r.nama, r.shift, r.tanggal].some((v) =>
+      (v || "").toLowerCase().includes(q.toLowerCase())
+    )
   );
 
   return (
     <div>
       <Card>
         <CardHeader className="flex justify-between items-center">
-          <CardTitle>Jadwal Kerja Mingguan</CardTitle>
+          <CardTitle>Jadwal Kerja Pegawai</CardTitle>
           <div className="flex gap-2">
             <Input
               placeholder="Cari nama atau tanggal..."
@@ -146,6 +137,7 @@ export default function JadwalKerja() {
             </Button>
           </div>
         </CardHeader>
+
         <CardContent>
           <Table>
             <THead>
@@ -166,30 +158,20 @@ export default function JadwalKerja() {
                   <TD>{r.jam_mulai} - {r.jam_selesai}</TD>
                   <TD className="text-right">
                     <div className="flex justify-end gap-2">
-                      {/* Tombol Edit */}
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
+                        onClick={() => {
                           setSelectedEdit(r);
                           setModalEdit(true);
                         }}
                         className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-yellow-50 hover:text-yellow-600 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-[#1e293b]/80 dark:hover:text-yellow-400 transition-all duration-200"
-                        title="Edit Jadwal"
                       >
-                        <i className="fa-solid fa-pen text-yellow-500" />
-                        <span>Edit</span>
+                        <i className="fa-solid fa-pen text-yellow-500" /> Edit
                       </button>
-                      {/* Tombol Hapus */}
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteSchedule(r.id);
-                        }}
+                        onClick={() => deleteSchedule(r.id)}
                         className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-red-50 hover:text-red-600 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-[#0f172a]/80 dark:hover:text-red-400 transition-all duration-200"
-                        title="Hapus Jadwal"
                       >
-                        <i className="fa-solid fa-trash text-red-500" />
-                        <span>Hapus</span>
+                        <i className="fa-solid fa-trash text-red-500" /> Hapus
                       </button>
                     </div>
                   </TD>
@@ -242,9 +224,6 @@ export default function JadwalKerja() {
               <option value="Siang">Siang</option>
               <option value="Malam">Malam</option>
             </select>
-            <small className="text-xs text-gray-500">
-              Otomatis isi jam kerja sesuai shift (bisa disesuaikan).
-            </small>
           </div>
 
           <div>
@@ -294,23 +273,12 @@ export default function JadwalKerja() {
                 name="shift"
                 defaultValue={selectedEdit.shift}
                 className="ds-input w-full"
-                onChange={(e) => {
-                  const shift = e.target.value;
-                  if (shift && shiftTimes[shift]) {
-                    const { jam_mulai, jam_selesai } = shiftTimes[shift];
-                    document.querySelector('input[name="jam_mulai"]').value = jam_mulai;
-                    document.querySelector('input[name="jam_selesai"]').value = jam_selesai;
-                  }
-                }}
                 required
               >
                 <option value="Pagi">Pagi</option>
                 <option value="Siang">Siang</option>
                 <option value="Malam">Malam</option>
               </select>
-              <small className="text-xs text-gray-500">
-                Otomatis isi jam kerja sesuai shift (bisa disesuaikan).
-              </small>
             </div>
 
             <div>
