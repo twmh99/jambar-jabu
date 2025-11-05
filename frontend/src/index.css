@@ -164,3 +164,31 @@
 @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .animate-fadeIn { animation: fadeIn 0.2s ease-out; }
 .animate-scaleIn { animation: scaleIn 0.25s ease-out; }
+
+html, body {
+  overflow-y: auto !important;
+  overflow-x: hidden;
+}
+
+/* =========================================================
+   🧭 FIX GLOBAL OVERFLOW — HILANGKAN SCROLL KE SAMPING MODAL
+   ========================================================= */
+.modal-container,
+.modal-backdrop,
+body,
+html {
+  overflow-x: hidden !important;
+}
+
+/* Pastikan semua konten di dalam modal tidak bisa keluar batas */
+.modal-container * {
+  max-width: 100% !important;
+  box-sizing: border-box;
+}
+
+/* Cegah hover transform menambah lebar total (khusus tombol edit/delete) */
+.btn-edit:hover,
+.btn-delete:hover,
+.btn-verify:hover {
+  transform: none !important;
+}

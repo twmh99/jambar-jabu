@@ -144,6 +144,44 @@ class JadwalController extends Controller
         }
     }
 
+    /** ===================== 📄 DETAIL JADWAL ===================== */
+    public function show($id)
+    {
+        try {
+            $jadwal = Jadwal::leftJoin('pegawai', 'jadwal.pegawai_id', '=', 'pegawai.id')
+                ->where('jadwal.id', $id)
+                ->select(
+                    'jadwal.id',
+                    'pegawai.nama as nama',
+                    'pegawai.jabatan',
+                    'pegawai.telepon',
+                    'pegawai.status',
+                    'jadwal.tanggal',
+                    'jadwal.shift',
+                    'jadwal.jam_mulai',
+                    'jadwal.jam_selesai',
+                    'jadwal.created_at',
+                    'jadwal.updated_at'
+                )
+                ->first();
+
+            if (!$jadwal) {
+                return response()->json(['message' => 'Jadwal tidak ditemukan'], 404);
+            }
+
+            return response()->json([
+                'message' => 'Detail jadwal berhasil dimuat.',
+                'data' => $jadwal,
+            ], 200);
+        } catch (\Throwable $e) {
+            Log::error("❌ Gagal memuat detail jadwal: " . $e->getMessage());
+            return response()->json([
+                'message' => 'Terjadi kesalahan saat memuat detail jadwal.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
     /** ===================== ✏️ UPDATE ===================== */
     public function update(Request $request, $id)
     {

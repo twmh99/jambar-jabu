@@ -28,7 +28,7 @@ export default function Login() {
       // Kompatibilitas penuh dengan backend Laravel:
       const payload = {
         login: login, // bisa nama / email
-        email: login, // jaga kompatibilitas jika backend masih pakai email
+        email: login, 
         password: password,
       };
 

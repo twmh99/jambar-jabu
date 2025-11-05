@@ -239,7 +239,7 @@ export default function MainLayout() {
 
         {/* === MAIN CONTENT === */}
         <main
-          className={`flex-1 rounded-[2rem] p-8 shadow-xl border min-h-[75vh] backdrop-blur-2xl transition-all duration-700 ${
+          className={`flex-1 rounded-[2rem] p-8 shadow-xl border min-h-[75vh] backdrop-blur-2xl transition-all duration-700 overflow-visible ${
             activeTheme === "dark"
               ? "bg-[#1e293b]/60 border-gray-700 hover:shadow-gray-800/40"
               : "bg-white/70 border-gray-200 hover:shadow-gray-300/50"

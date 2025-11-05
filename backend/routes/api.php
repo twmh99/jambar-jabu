@@ -7,6 +7,7 @@ use App\Http\Controllers\JadwalController;
 use App\Http\Controllers\AbsensiController;
 use App\Http\Controllers\GajiController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\DashboardController;
 
 /* ===== AUTH (public) ===== */
 Route::post('/login', [AuthController::class, 'login']);
@@ -21,6 +22,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/change-password', [AuthController::class, 'changePassword']);
 
     /* Laporan Owner */
+    Route::get('/dashboard/summary', [DashboardController::class, 'summary']);
     Route::prefix('laporan')->group(function () {
         Route::get('/owner-summary', [ReportController::class, 'ownerSummary']);
         Route::get('/analisis', [ReportController::class, 'analisisKinerja']);
@@ -30,6 +32,7 @@ Route::middleware('auth:sanctum')->group(function () {
     /* Jadwal */
     Route::get('/jadwal/today', [JadwalController::class, 'today']);
     Route::get('/jadwal/week', [JadwalController::class, 'week']);
+    Route::get('/jadwal/{id}', [JadwalController::class, 'show']);
     Route::apiResource('jadwal', JadwalController::class);
 
     /* Absensi (supervisor & umum) */

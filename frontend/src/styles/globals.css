@@ -273,20 +273,59 @@ button:disabled i.fa-trash {
 }
 
 /* ========================================
-   ✏️ Edit Button (kuning)
-======================================== */
+   ✏️ Edit Button (kuning cerah, versi final)
+ ======================================== */
 .btn-edit {
-  @apply btn-base border-gray-300 text-gray-700 hover:bg-yellow-50 hover:text-yellow-600
-         dark:border-gray-600 dark:text-gray-200 dark:hover:bg-[#1e293b]/80 dark:hover:text-yellow-400;
+  @apply inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium border rounded-xl transition-all duration-300;
+  background-color: #ffffff; /* putih bersih */
+  color: #1f2937;            /* abu gelap */
+  border-color: #d1d5db;     /* abu netral */
 }
 
 .btn-edit i {
-  color: #facc15; /* yellow-400 */
-  transition: color 0.3s ease;
+  color: #facc15; /* kuning (yellow-400) */
+  transition: color 0.3s ease, transform 0.2s ease;
+}
+
+.btn-edit:hover {
+  background-color: #fef9c3; /* kuning pucat */
+  color: #d97706;            /* amber (amber-600) */
+  transform: translateY(-1px);
+}
+
+.btn-edit:hover i {
+  color: #d97706; /* amber-600 untuk hover */
+  transform: scale(1.1);
+}
+
+button i.fa-pen {
+  color: #facc15 !important; /* kuning-400 */
+}
+
+button:hover i.fa-pen {
+  color: #fde047 !important; /* kuning-300 lebih terang */
+}
+
+/* Versi dark mode */
+.dark .btn-edit {
+  background-color: #1e293b; /* slate-800 */
+  color: #e5e7eb;            /* gray-200 */
+  border-color: #475569;     /* slate-600 */
 }
 
 .dark .btn-edit i {
-  color: #fde047; /* lighter yellow for dark mode */
+  color: #fde047; /* kuning terang */
+}
+
+.dark .btn-edit:hover {
+  background-color: #334155; /* sedikit lebih terang */
+  color: #facc15;
+  border-color: #facc15;
+}
+
+.dark .btn-edit:hover i {
+  color: #facc15;
+  transform: scale(1.1);
 }
 
 /* ========================================
@@ -391,3 +430,4 @@ button:disabled i.fa-trash {
   background-color: hsl(var(--border));
   transform: translateY(-1px);
 }
+

@@ -17,39 +17,47 @@ import { toast } from "../../components/ui/toast";
 
 export default function OwnerDashboard() {
   const [summary, setSummary] = React.useState({
-    total_employees: 0,
-    attendance_this_month: 0,
-    total_payroll: 0,
-    attendance_trend: [],
-    shift_composition: {},
+    total_pegawai: 0,
+    absensi_bulan_ini: 0,
+    total_gaji: 0,
+    tren_kehadiran: [],
+    komposisi_shift: [],
   });
   const [employees, setEmployees] = React.useState([]);
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
+  const [selectedPegawai, setSelectedPegawai] = React.useState(null);
+  const [detailOpen, setDetailOpen] = React.useState(false);
   const nav = useNavigate();
 
-  // ubah object shift_composition jadi array {label, value}
-  const pieData = React.useMemo(() => {
-    const obj = summary.shift_composition || {};
-    return Object.entries(obj).map(([label, value]) => ({ label, value }));
-  }, [summary.shift_composition]);
-
-  /** 🔁 Load data dashboard */
+  /** 🔁 Load data dashboard (summary + pegawai) */
   const load = async () => {
     setLoading(true);
     try {
       const [summaryRes, empRes] = await Promise.all([
-        api.get("/laporan/owner-summary"),
+        api.get("/dashboard/summary"), // ganti endpoint sesuai backend Laravel
         api.get("/pegawai"),
       ]);
-      // backend bisa return {data: {...}} atau {...} → keduanya di-handle
-      setSummary(summaryRes.data?.data || summaryRes.data);
-      const list = Array.isArray(empRes.data)
+
+      const summaryData =
+        summaryRes.data?.data ||
+        summaryRes.data ||
+        {
+          total_pegawai: 0,
+          absensi_bulan_ini: 0,
+          total_gaji: 0,
+          tren_kehadiran: [],
+          komposisi_shift: [],
+        };
+
+      const employeeList = Array.isArray(empRes.data)
         ? empRes.data
         : Array.isArray(empRes.data?.data)
         ? empRes.data.data
         : [];
-      setEmployees(list);
+
+      setSummary(summaryData);
+      setEmployees(employeeList);
     } catch (err) {
       console.error("Dashboard load error:", err.response?.data || err.message);
       toast.error("Gagal memuat data dashboard");
@@ -62,37 +70,68 @@ export default function OwnerDashboard() {
     load();
   }, []);
 
-  /** ➕ Quick Add Pegawai */
-  const quickAdd = async (e) => {
+  /** ➕ Tambah Pegawai */
+  const addEmployee = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const data = Object.fromEntries(fd.entries());
+
     if (!data.nama || !data.jabatan || !data.telepon || !data.email) {
-      toast.error("Lengkapi nama, jabatan, telepon, dan email.");
+      toast.error("Lengkapi nama, jabatan, telepon, dan email!");
       return;
     }
+
     try {
+      setLoading(true);
       await api.post("/pegawai", {
         nama: data.nama,
         jabatan: data.jabatan,
         telepon: data.telepon,
-        status: data.status || "Aktif",
-        hourly_rate: Number(data.hourly_rate || 20000),
         email: data.email,
         role: data.role || "employee",
+        status: data.status || "Aktif",
+        hourly_rate: Number(data.hourly_rate || 20000),
       });
-      toast.success("Pegawai berhasil ditambahkan");
+      toast.success(`Pegawai "${data.nama}" berhasil ditambahkan.`);
       setOpen(false);
-      e.currentTarget.reset();
+      e.target.reset();
       load();
     } catch (err) {
+      console.error("Tambah pegawai error:", err.response?.data || err.message);
       const msg =
         err.response?.data?.message ||
         err.response?.data?.error ||
         "Gagal menambah pegawai";
       toast.error(msg);
+    } finally {
+      setLoading(false);
     }
   };
+
+  /** 👁️ Lihat detail pegawai */
+  const showDetail = async (pegawai) => {
+    try {
+      const res = await api.get(`/pegawai/profil/${pegawai.id}`);
+      setSelectedPegawai(res.data?.data || pegawai);
+      setDetailOpen(true);
+    } catch (err) {
+      console.warn("Gagal memuat profil lengkap:", err.message);
+      setSelectedPegawai(pegawai);
+      setDetailOpen(true);
+    }
+  };
+
+  /** Data pie komposisi shift */
+  const pieData = React.useMemo(() => {
+    if (Array.isArray(summary.komposisi_shift)) return summary.komposisi_shift;
+    if (typeof summary.komposisi_shift === "object") {
+      return Object.entries(summary.komposisi_shift).map(([label, value]) => ({
+        label,
+        value,
+      }));
+    }
+    return [];
+  }, [summary.komposisi_shift]);
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -101,20 +140,20 @@ export default function OwnerDashboard() {
         {[
           {
             label: "Total Pegawai",
-            value: summary.total_employees,
+            value: summary.total_pegawai,
             icon: "fa-users",
             color: "accent",
           },
           {
             label: "Absensi Bulan Ini",
-            value: summary.attendance_this_month,
+            value: summary.absensi_bulan_ini,
             icon: "fa-calendar-check",
             color: "success",
           },
           {
             label: "Total Gaji (IDR)",
             value: new Intl.NumberFormat("id-ID").format(
-              summary.total_payroll || 0
+              summary.total_gaji || 0
             ),
             icon: "fa-sack-dollar",
             color: "warning",
@@ -144,7 +183,6 @@ export default function OwnerDashboard() {
 
       {/* ===== Grafik Tren & Komposisi ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Tren Kehadiran */}
         <Card className="lg:col-span-2">
           <CardHeader className="flex items-center justify-between">
             <CardTitle className="text-[hsl(var(--primary))] font-semibold">
@@ -160,11 +198,14 @@ export default function OwnerDashboard() {
             </Button>
           </CardHeader>
           <CardContent>
-            <Sparkline data={summary.attendance_trend || []} />
+            {summary.tren_kehadiran?.length > 0 ? (
+              <Sparkline data={summary.tren_kehadiran} />
+            ) : (
+              <p className="text-gray-400 text-sm">Belum ada data kehadiran</p>
+            )}
           </CardContent>
         </Card>
 
-        {/* Komposisi Shift */}
         <Card>
           <CardHeader className="flex items-center justify-between">
             <CardTitle className="text-[hsl(var(--primary))] font-semibold">
@@ -180,14 +221,18 @@ export default function OwnerDashboard() {
             </Button>
           </CardHeader>
           <CardContent className="flex items-center justify-center">
-            <Pie
-              values={pieData}
-              colors={[
-                "hsl(var(--accent))",
-                "hsl(var(--primary))",
-                "hsl(var(--muted-foreground))",
-              ]}
-            />
+            {pieData.length > 0 ? (
+              <Pie
+                values={pieData}
+                colors={[
+                  "hsl(var(--accent))",
+                  "hsl(var(--primary))",
+                  "hsl(var(--muted-foreground))",
+                ]}
+              />
+            ) : (
+              <p className="text-gray-400 text-sm">Belum ada data shift</p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -221,7 +266,8 @@ export default function OwnerDashboard() {
                 employees.map((e) => (
                   <TR
                     key={e.id}
-                    className="hover:bg-[hsl(var(--muted))]/20 transition-colors"
+                    onClick={() => showDetail(e)}
+                    className="hover:bg-[hsl(var(--muted))]/20 cursor-pointer transition-all"
                   >
                     <TD className="font-mono text-xs text-gray-500">{e.id}</TD>
                     <TD>{e.nama}</TD>
@@ -251,14 +297,10 @@ export default function OwnerDashboard() {
         </CardContent>
       </Card>
 
-      {/* ===== Modal Tambah Cepat ===== */}
-      <Modal
-        open={open}
-        title="Tambah Pegawai Cepat"
-        onClose={() => setOpen(false)}
-      >
+      {/* ===== Modal Tambah Pegawai ===== */}
+      <Modal open={open} title="Tambah Pegawai" onClose={() => setOpen(false)}>
         <form
-          onSubmit={quickAdd}
+          onSubmit={addEmployee}
           className="grid grid-cols-1 sm:grid-cols-2 gap-4"
         >
           <div className="sm:col-span-2">
@@ -274,6 +316,18 @@ export default function OwnerDashboard() {
             <Input name="telepon" required />
           </div>
           <div>
+            <Label>Email (Login)</Label>
+            <Input type="email" name="email" required />
+          </div>
+          <div>
+            <Label>Role</Label>
+            <Select name="role" defaultValue="employee">
+              <option value="employee">Pegawai</option>
+              <option value="supervisor">Supervisor</option>
+              <option value="owner">Owner</option>
+            </Select>
+          </div>
+          <div>
             <Label>Status</Label>
             <Select name="status" defaultValue="Aktif">
               <option>Aktif</option>
@@ -282,42 +336,91 @@ export default function OwnerDashboard() {
           </div>
           <div>
             <Label>Tarif/Jam (IDR)</Label>
-            <Input
-              type="number"
-              name="hourly_rate"
-              defaultValue={20000}
-              min="0"
-              step="1000"
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <Label>Email (Login)</Label>
-            <Input type="email" name="email" required />
-          </div>
-          <div className="sm:col-span-2">
-            <Label>Role</Label>
-            <Select name="role" defaultValue="employee">
-              <option value="employee">Pegawai</option>
-              <option value="supervisor">Supervisor</option>
-              <option value="owner">Owner</option>
-            </Select>
+            <Input type="number" name="hourly_rate" defaultValue={20000} />
           </div>
           <div className="sm:col-span-2 flex justify-end gap-2 pt-2">
-            <button
+            <Button
               type="button"
-              className="ds-btn ds-btn-outline"
+              variant="outline"
               onClick={() => setOpen(false)}
             >
               Batal
-            </button>
-            <Button
-              type="submit"
-              className="bg-[hsl(var(--accent))] text-[hsl(var(--primary))] hover:bg-yellow-400"
-            >
-              Simpan
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Menyimpan..." : "Simpan"}
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* ===== Modal Detail Pegawai ===== */}
+      <Modal
+        open={detailOpen}
+        title="Detail Pegawai"
+        onClose={() => setDetailOpen(false)}
+      >
+        {selectedPegawai ? (
+          <div className="max-h-[70vh] overflow-y-auto space-y-5 text-[15px]">
+            <div className="flex flex-col items-center text-center">
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#38bdf8] to-[#06b6d4] flex items-center justify-center text-white text-3xl font-semibold shadow-lg">
+                {selectedPegawai.nama?.charAt(0)?.toUpperCase() || "?"}
+              </div>
+              <h2 className="mt-3 text-lg font-semibold">
+                {selectedPegawai.nama}
+              </h2>
+              <p className="text-[hsl(var(--muted-foreground))]">
+                {selectedPegawai.jabatan || "—"}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-3 rounded-xl border bg-[hsl(var(--card))] shadow-sm">
+                <strong className="block text-xs text-gray-500">Telepon</strong>
+                <span>{selectedPegawai.telepon || "-"}</span>
+              </div>
+              <div className="p-3 rounded-xl border bg-[hsl(var(--card))] shadow-sm">
+                <strong className="block text-xs text-gray-500">Email</strong>
+                <span>{selectedPegawai.email || "-"}</span>
+              </div>
+              <div className="p-3 rounded-xl border bg-[hsl(var(--card))] shadow-sm">
+                <strong className="block text-xs text-gray-500">Role</strong>
+                <span className="capitalize">
+                  {selectedPegawai.role || "-"}
+                </span>
+              </div>
+              <div className="p-3 rounded-xl border bg-[hsl(var(--card))] shadow-sm">
+                <strong className="block text-xs text-gray-500">Status</strong>
+                <span
+                  className={`ds-badge ${
+                    selectedPegawai.status === "Aktif"
+                      ? "bg-[hsl(var(--success))] text-white"
+                      : "bg-[hsl(var(--muted))]"
+                  }`}
+                >
+                  {selectedPegawai.status}
+                </span>
+              </div>
+              <div className="sm:col-span-2 p-3 rounded-xl border bg-[hsl(var(--card))] shadow-sm">
+                <strong className="block text-xs text-gray-500">
+                  Tarif/Jam
+                </strong>
+                <span>
+                  Rp {selectedPegawai.hourly_rate?.toLocaleString("id-ID") || 0}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button variant="outline" onClick={() => setDetailOpen(false)}>
+                Tutup
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <p className="text-center text-gray-500 py-6">
+            Memuat detail pegawai...
+          </p>
+        )}
       </Modal>
     </div>
   );

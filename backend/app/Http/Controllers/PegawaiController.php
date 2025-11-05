@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
 use App\Models\Pegawai;
 use App\Models\User;
+use Carbon\Carbon;
 
 class PegawaiController extends Controller
 {
@@ -37,11 +38,13 @@ class PegawaiController extends Controller
 
     /**
      * ➕ Tambah pegawai & otomatis buat akun user
-     * Password default: kata pertama nama + "123"
+     * Password default: Password123
      */
     public function store(Request $request)
     {
         try {
+            Log::info('📥 Data request masuk ke PegawaiController@store', $request->all());
+
             $validated = $request->validate([
                 'nama'        => 'required|string|max:255',
                 'jabatan'     => 'nullable|string|max:255',
@@ -59,13 +62,13 @@ class PegawaiController extends Controller
                 'telepon'     => $validated['telepon'] ?? null,
                 'status'      => $validated['status'] ?? 'Aktif',
                 'hourly_rate' => $validated['hourly_rate'] ?? 20000,
+                'email'       => $validated['email'],
             ]);
 
-            // ✅ Buat password default otomatis
-            $firstWord = ucfirst(strtolower(explode(' ', trim($pegawai->nama))[0]));
-            $defaultPassword = $firstWord . '123';
+            // ✅ Password default tetap "Password123"
+            $defaultPassword = 'Password123';
 
-            // ✅ Buat akun user terhubung ke pegawai
+            // ✅ Buat akun user
             $user = User::create([
                 'name'           => $pegawai->nama,
                 'email'          => $validated['email'],
@@ -75,28 +78,62 @@ class PegawaiController extends Controller
                 'is_first_login' => true,
             ]);
 
-            Log::info('✅ Akun baru dibuat', [
+            Log::info('✅ Akun pegawai baru dibuat', [
+                'pegawai'  => $pegawai->nama,
                 'email'    => $user->email,
                 'password' => $defaultPassword,
                 'role'     => $user->role,
             ]);
 
-            // ✅ Kirim email jika Mail tersedia (jangan error jika gagal)
+            /**
+             * 📧 Kirim email notifikasi
+             * 1️⃣ Ke pegawai baru (akun login)
+             * 2️⃣ Ke semua supervisor
+             */
             try {
                 if (config('mail.mailers.smtp.transport') ?? false) {
+                    // — Email ke pegawai —
                     Mail::raw(
-                        "Halo {$pegawai->nama},\n\nAkun Anda telah dibuat di Sistem SMPJ.\n\n" .
-                        "Email: {$user->email}\nPassword: {$defaultPassword}\n\n" .
-                        "Segera login dan ubah password Anda pada login pertama.\n\nSalam,\nSMPJ System",
-                        fn($message) => $message
-                            ->to($user->email)
-                            ->subject('Akun SMPJ Anda Telah Dibuat')
+                        "Halo {$pegawai->nama},\n\n".
+                        "Akun Anda telah dibuat di Sistem SMPJ.\n\n".
+                        "Email: {$user->email}\nPassword: {$defaultPassword}\n\n".
+                        "Segera login dan ubah password Anda pada login pertama.\n\n".
+                        "Salam,\nSMPJ System",
+                        function ($message) use ($user) {
+                            $message->to($user->email)
+                                ->subject('Akun SMPJ Anda Telah Dibuat');
+                        }
                     );
+                    Log::info("📧 Email notifikasi akun baru dikirim ke {$user->email}");
+
+                    // — Email ke supervisor —
+                    $supervisors = User::where('role', 'supervisor')->get();
+                    foreach ($supervisors as $supervisor) {
+                        if ($supervisor->email) {
+                            Mail::raw(
+                                "Halo {$supervisor->name},\n\n".
+                                "Sistem SMPJ baru saja menambahkan pegawai baru:\n\n".
+                                "Nama Pegawai : {$pegawai->nama}\n".
+                                "Email        : {$pegawai->email}\n".
+                                "Password     : {$defaultPassword}\n".
+                                "Tanggal      : " . Carbon::now()->format('d M Y H:i') . "\n\n".
+                                "Mohon informasikan password default ini kepada pegawai terkait agar segera menggantinya.\n\nSalam,\nSMPJ System",
+                                function ($message) use ($supervisor) {
+                                    $message->to($supervisor->email)
+                                        ->subject('[SMPJ] Pegawai Baru Ditambahkan');
+                                }
+                            );
+                            Log::info("📨 Email notifikasi dikirim ke supervisor: {$supervisor->email}");
+                        }
+                    }
+                } else {
+                    Log::warning('⚠️ Mail transport tidak dikonfigurasi, email tidak dikirim.');
                 }
             } catch (\Throwable $mailError) {
-                Log::warning("Gagal mengirim email ke {$user->email}: " . $mailError->getMessage());
+                Log::warning('⚠️ Gagal mengirim email notifikasi: ' . $mailError->getMessage());
             }
 
+            // ✅ Balasan ke frontend
             return response()->json([
                 'message' => 'Pegawai & akun login berhasil dibuat.',
                 'data' => [
@@ -108,15 +145,14 @@ class PegawaiController extends Controller
                     ],
                 ],
             ], 201);
-
-        } catch (\Illuminate\Validation\ValidationException $ve) {
-            // ❌ Validasi gagal
+        }
+        catch (\Illuminate\Validation\ValidationException $ve) {
             return response()->json([
                 'message' => 'Validasi gagal.',
                 'errors'  => $ve->errors(),
             ], 422);
-        } catch (\Throwable $e) {
-            // ❌ Kesalahan tak terduga
+        }
+        catch (\Throwable $e) {
             Log::error("Gagal menyimpan pegawai: {$e->getMessage()}", ['trace' => $e->getTraceAsString()]);
             return response()->json([
                 'message' => 'Gagal menyimpan data pegawai.',
@@ -185,38 +221,6 @@ class PegawaiController extends Controller
         ]);
     }
 
-    /** 🔄 Update profil pegawai sendiri */
-    public function updateProfil(Request $request, $id)
-    {
-        $pegawai = Pegawai::find($id);
-        if (!$pegawai) {
-            return response()->json(['message' => 'Pegawai tidak ditemukan.'], 404);
-        }
-
-        $data = $request->validate([
-            'nama'     => 'nullable|string|max:255',
-            'telepon'  => 'nullable|string|max:20',
-            'password' => 'nullable|string|min:6',
-        ]);
-
-        if (!empty($data['password'])) {
-            $user = User::where('pegawai_id', $pegawai->id)->first();
-            if ($user) {
-                $user->password = Hash::make($data['password']);
-                $user->is_first_login = false;
-                $user->save();
-            }
-            unset($data['password']);
-        }
-
-        $pegawai->update($data);
-
-        return response()->json([
-            'message' => 'Profil pegawai berhasil diperbarui.',
-            'data'    => $pegawai,
-        ]);
-    }
-
     /** 📄 Tampilkan detail satu pegawai */
     public function show($id)
     {
@@ -228,51 +232,14 @@ class PegawaiController extends Controller
         return response()->json(['data' => $pegawai]);
     }
 
-
-public function getGaji($id)
-{
-    try {
-        // Pastikan tabel gaji tersedia
-        if (!DB::getSchemaBuilder()->hasTable('gaji')) {
-            return response()->json([]);
-        }
-
-        // Ambil data sesuai struktur tabel kamu
-        $data = DB::table('gaji')
-            ->where('pegawai_id', $id)
-            ->select(
-                'periode_awal',
-                'periode_akhir',
-                'total_jam',
-                'gaji_pokok',
-                'bonus_tip',
-                'total_gaji',
-                'created_at'
-            )
-            ->orderByDesc('periode_akhir')
-            ->get();
-
-        // Kalau kosong, return array kosong biar frontend aman
-        if ($data->isEmpty()) {
-            return response()->json([]);
-        }
-
-        return response()->json($data, 200);
-    } catch (\Throwable $e) {
-        \Log::error("Error getGaji pegawai {$id}: " . $e->getMessage());
-        return response()->json(['message' => 'Gagal memuat data gaji.'], 500);
-    }
-}
-
-
-    /** 🔑 Ganti password pegawai (dari profil pegawai sendiri) */
+    /** 🔑 Ganti password pegawai dari profil sendiri */
     public function changePassword(Request $request)
     {
         $user = $request->user();
 
         $request->validate([
             'current_password' => 'required|string',
-            'new_password' => 'required|string|min:6|confirmed',
+            'new_password'     => 'required|string|min:6|confirmed',
         ]);
 
         if (!Hash::check($request->current_password, $user->password)) {
