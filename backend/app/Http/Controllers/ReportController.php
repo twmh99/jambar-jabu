@@ -17,7 +17,7 @@ use App\Imports\TransaksiImport;
 
 class ReportController extends Controller
 {
-    /** 📥 Import File Transaksi */
+    /** Import File Transaksi */
     public function importTransaksi(Request $request)
     {
         $request->validate([
@@ -45,7 +45,7 @@ class ReportController extends Controller
         }
     }
 
-    /** 📊 Ringkasan Dashboard Owner */
+    /** Ringkasan Dashboard Owner */
     public function ownerSummary()
     {
         try {
@@ -130,18 +130,19 @@ class ReportController extends Controller
         }
     }
 
-    /** 📈 Analisis Kinerja */
+    /** Analisis Kinerja */
     public function analisisKinerja(Request $request)
     {
         try {
-            $metric = $request->query('metric', 'hadir');
+            $metric = $request->query('metric', 'overall');
             $limit  = (int) $request->query('limit', 0);
-            $allowedMetrics = ['hadir', 'disiplin', 'gaji', 'jam'];
+            $allowedMetrics = ['overall', 'hadir', 'disiplin', 'gaji', 'jam'];
             if (!in_array($metric, $allowedMetrics, true)) {
-                $metric = 'hadir';
+                $metric = 'overall';
             }
 
             $metaInfo = [
+                'overall' => ['title' => 'Pegawai Terbaik (Akumulasi)', 'unit' => 'poin'],
                 'hadir'    => ['title' => 'Top Kehadiran', 'unit' => 'hari'],
                 'disiplin' => ['title' => 'Top Kepatuhan Jadwal', 'unit' => '%'],
                 'gaji'     => ['title' => 'Top Pendapatan', 'unit' => 'rupiah'],
@@ -149,6 +150,82 @@ class ReportController extends Controller
             ];
 
             switch ($metric) {
+                case 'overall':
+                    $absensiCount = Absensi::select('pegawai_id', DB::raw('COUNT(*) as total_hadir'))
+                        ->where('status', 'Hadir')
+                        ->groupBy('pegawai_id');
+
+                    $jadwalCount = Jadwal::select('pegawai_id', DB::raw('COUNT(*) as total_jadwal'))
+                        ->groupBy('pegawai_id');
+
+                    $gajiSum = Gaji::select(
+                        'pegawai_id',
+                        DB::raw('SUM(COALESCE(total_gaji,0) + COALESCE(total_tip,0)) as total_pendapatan')
+                    )->groupBy('pegawai_id');
+
+                    $jamSum = Absensi::select(
+                        'pegawai_id',
+                        DB::raw('SUM(TIMESTAMPDIFF(MINUTE, jam_masuk, jam_keluar)) as total_menit')
+                    )
+                        ->whereNotNull('jam_masuk')
+                        ->whereNotNull('jam_keluar')
+                        ->groupBy('pegawai_id');
+
+                    $rows = Pegawai::leftJoinSub($absensiCount, 'absensi', 'pegawai.id', '=', 'absensi.pegawai_id')
+                        ->leftJoinSub($jadwalCount, 'jadwal', 'pegawai.id', '=', 'jadwal.pegawai_id')
+                        ->leftJoinSub($gajiSum, 'gaji', 'pegawai.id', '=', 'gaji.pegawai_id')
+                        ->leftJoinSub($jamSum, 'jam', 'pegawai.id', '=', 'jam.pegawai_id')
+                        ->select(
+                            'pegawai.nama',
+                            'pegawai.jabatan',
+                            DB::raw('COALESCE(absensi.total_hadir, 0) as total_hadir'),
+                            DB::raw('COALESCE(jadwal.total_jadwal, 0) as total_jadwal'),
+                            DB::raw('CASE WHEN COALESCE(jadwal.total_jadwal, 0) = 0 THEN 0 ELSE ROUND(COALESCE(absensi.total_hadir,0) / jadwal.total_jadwal * 100, 2) END as disiplin_score'),
+                            DB::raw('COALESCE(gaji.total_pendapatan, 0) as total_pendapatan'),
+                            DB::raw('COALESCE(jam.total_menit, 0) as total_menit')
+                        )
+                        ->get();
+
+                    $maxHadir       = max($rows->pluck('total_hadir')->toArray() ?: [0]);
+                    $maxDisiplin    = max($rows->pluck('disiplin_score')->toArray() ?: [0]);
+                    $maxPendapatan  = max($rows->pluck('total_pendapatan')->toArray() ?: [0]);
+                    $maxMenit       = max($rows->pluck('total_menit')->toArray() ?: [0]);
+
+                    $performances = $rows->map(function ($row) use ($maxHadir, $maxDisiplin, $maxPendapatan, $maxMenit) {
+                        $normHadir      = $maxHadir > 0 ? ($row->total_hadir / $maxHadir) : 0;
+                        $normDisiplin   = $maxDisiplin > 0 ? ($row->disiplin_score / $maxDisiplin) : 0;
+                        $normPendapatan = $maxPendapatan > 0 ? ($row->total_pendapatan / $maxPendapatan) : 0;
+                        $normJam        = $maxMenit > 0 ? ($row->total_menit / $maxMenit) : 0;
+
+                        $score = round((($normHadir + $normDisiplin + $normPendapatan + $normJam) / 4) * 100, 2);
+
+                        return [
+                            'nama'            => $row->nama,
+                            'jabatan'         => $row->jabatan,
+                            'total_hadir'     => (int) $row->total_hadir,
+                            'total_jadwal'    => (int) $row->total_jadwal,
+                            'disiplin_score'  => (float) $row->disiplin_score,
+                            'total_pendapatan'=> (float) $row->total_pendapatan,
+                            'total_menit'     => (int) $row->total_menit,
+                            'value'           => $score,
+                        ];
+                    })
+                    ->sortByDesc('value')
+                    ->values();
+
+                    if ($limit > 0) {
+                        $performances = $performances->take($limit);
+                    }
+
+                    return response()->json([
+                        'data' => $performances,
+                        'meta' => [
+                            'metric' => 'overall',
+                            'title'  => $metaInfo['overall']['title'],
+                            'unit'   => $metaInfo['overall']['unit'],
+                        ],
+                    ]);
+                    break;
                 case 'disiplin':
                     $absensiSub = Absensi::select('pegawai_id', DB::raw('COUNT(*) as total_hadir'))
                         ->where('status', 'Hadir')
@@ -270,7 +347,7 @@ class ReportController extends Controller
         }
     }
 
-    /** 💰 Laporan Gaji & Tip – gabungkan data internal + upload */
+    /** Laporan Gaji & Tip – gabungkan data internal + upload */
     public function payrollReport(Request $request)
     {
         try {
@@ -485,7 +562,7 @@ class ReportController extends Controller
         }
     }
 
-    /** 📒 Raw Attendance Report */
+    /** Raw Attendance Report */
     public function attendanceRaw(Request $request)
     {
         try {

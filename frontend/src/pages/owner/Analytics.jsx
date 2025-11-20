@@ -18,6 +18,7 @@ import api from "../../services/api";
 import { toast } from "../../components/ui/toast";
 
 const metricOptions = [
+  { value: "overall", label: "Pegawai Terbaik (Akumulasi)" },
   { value: "hadir", label: "Jumlah Kehadiran" },
   { value: "disiplin", label: "Kepatuhan Jadwal" },
   { value: "gaji", label: "Gaji Tertinggi" },
@@ -85,6 +86,8 @@ export default function Analytics() {
         return `${item.value?.toFixed(1) || 0} jam`;
       case "disiplin":
         return `${item.value?.toFixed(1) || 0}%`;
+      case "overall":
+        return `${item.value?.toFixed(1) || 0} poin`;
       case "hadir":
       default:
         return `${item.value || item.total_hadir || 0} hadir`;
@@ -121,7 +124,7 @@ export default function Analytics() {
           <div>
             <CardTitle>Top 3 Data Pegawai</CardTitle>
             <p className="text-sm text-[hsl(var(--muted-foreground))]">
-              {topMeta?.title || "Peringkat terbaik berdasarkan metrik pilihan"}
+              {topMeta?.title || metricOptions.find((m) => m.value === topMetric)?.label || "Peringkat terbaik berdasarkan metrik pilihan"}
             </p>
           </div>
           <select

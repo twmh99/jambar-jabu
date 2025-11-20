@@ -17,7 +17,7 @@ export default function DownloadButton({
   }
   return (
     <button onClick={toCSV} className={['ds-btn ds-btn-outline', className].join(' ').trim()}>
-      <i className="fa-solid fa-download mr-2" /> Download CSV
+      <i className="fa-solid fa-file-csv mr-2" /> Ekspor CSV
     </button>
   )
 }

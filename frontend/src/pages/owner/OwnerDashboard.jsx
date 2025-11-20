@@ -29,6 +29,13 @@ const JABATAN_OPTIONS = [
   "Pelayan",
   "Tukang Kebun",
 ];
+const normalizeJabatanOption = (jabatan) => {
+  if (!jabatan) return JABATAN_OPTIONS[0];
+  const found = JABATAN_OPTIONS.find(
+    (opt) => opt.toLowerCase() === jabatan.toLowerCase().trim()
+  );
+  return found || JABATAN_OPTIONS[0];
+};
 const deriveRoleFromJabatan = (jabatan) =>
   jabatan === "Supervisor" ? "supervisor" : "employee";
 const deriveRoleLabel = (jabatan) =>
@@ -137,15 +144,19 @@ export default function OwnerDashboard() {
     const fd = new FormData(e.currentTarget);
     const data = Object.fromEntries(fd.entries());
     const isEdit = Boolean(editId);
+    const nama = (data.nama || "").trim();
+    const jabatan = (data.jabatan || selectedJabatan || "").trim();
+    const telepon = (data.telepon || "").trim();
+    const email = (data.email || "").trim();
 
-    if (!data.nama || !data.jabatan || !data.telepon || (!isEdit && !data.email)) {
+    if (!nama || !jabatan || !telepon || (!isEdit && !email)) {
       toast.error("Lengkapi nama, jabatan, telepon, dan email!");
       return;
     }
 
     try {
       setLoading(true);
-      const normalizedJabatan = data.jabatan || selectedJabatan;
+      const normalizedJabatan = normalizeJabatanOption(jabatan);
       const resolvedHourly =
         Number(data.hourly_rate) ||
         ROLE_RATE_MAP[normalizedJabatan] ||
@@ -153,24 +164,24 @@ export default function OwnerDashboard() {
         20000;
       if (editId) {
         await api.put(`/pegawai/${editId}`, {
-          nama: data.nama,
+          nama,
           jabatan: normalizedJabatan,
-          telepon: data.telepon,
+          telepon,
           status: data.status || "Aktif",
           hourly_rate: resolvedHourly,
         });
-        toast.success(`Pegawai "${data.nama}" berhasil diperbarui.`);
+        toast.success(`Pegawai "${nama}" berhasil diperbarui.`);
       } else {
         await api.post("/pegawai", {
-          nama: data.nama,
+          nama,
           jabatan: normalizedJabatan,
-          telepon: data.telepon,
-          email: data.email,
+          telepon,
+          email,
           role: deriveRoleFromJabatan(normalizedJabatan),
           status: data.status || "Aktif",
           hourly_rate: resolvedHourly,
         });
-        toast.success(`Pegawai "${data.nama}" berhasil ditambahkan.`);
+        toast.success(`Pegawai "${nama}" berhasil ditambahkan.`);
       }
       setOpen(false);
       setEditId(null);
@@ -193,11 +204,14 @@ export default function OwnerDashboard() {
   const showDetail = async (pegawai) => {
     try {
       const res = await api.get(`/pegawai/profil/${pegawai.id}`);
-      setSelectedPegawai(res.data?.data || pegawai);
+      const detail = res.data?.data || pegawai;
+      setSelectedPegawai(detail);
+      setSelectedJabatan(normalizeJabatanOption(detail.jabatan));
       setDetailOpen(true);
     } catch (err) {
       console.warn("Gagal memuat profil lengkap:", err.message);
       setSelectedPegawai(pegawai);
+      setSelectedJabatan(normalizeJabatanOption(pegawai.jabatan));
       setDetailOpen(true);
     }
   };
@@ -282,18 +296,21 @@ export default function OwnerDashboard() {
               Lihat Laporan
             </Button>
           </CardHeader>
-          <CardContent>
-            {summary.tren_kehadiran?.length > 0 ? (
-              <Sparkline
-                data={summary.tren_kehadiran.map((d) => ({
-                  label: d.label,
-                  value: d.value,
-                }))}
-              />
-
-            ) : (
-              <p className="text-[hsl(var(--muted-foreground))] text-sm">Belum ada data kehadiran</p>
-            )}
+          <CardContent className="flex items-center justify-center">
+            <div className="w-full max-w-[540px]">
+              {summary.tren_kehadiran?.length > 0 ? (
+                <Sparkline
+                  data={summary.tren_kehadiran.map((d) => ({
+                    label: d.label,
+                    value: d.value,
+                  }))}
+                  height={150}
+                  width={360}
+                />
+              ) : (
+                <p className="text-[hsl(var(--muted-foreground))] text-sm">Belum ada data kehadiran</p>
+              )}
+            </div>
           </CardContent>
         </Card>
 
@@ -311,7 +328,7 @@ export default function OwnerDashboard() {
               Analitik
             </Button>
           </CardHeader>
-          <CardContent className="flex items-center justify-center">
+          <CardContent className="flex items-start justify-start">
             {pieValues.length > 0 ? (
               <Pie
                 values={pieValues}
@@ -321,6 +338,8 @@ export default function OwnerDashboard() {
                   "hsl(var(--pie-2))",
                   "hsl(var(--pie-3))",
                 ]}
+                legendSide
+                size={180}
               />
             ) : (
               <p className="text-[hsl(var(--muted-foreground))] text-sm">Belum ada data shift</p>
@@ -432,6 +451,7 @@ export default function OwnerDashboard() {
               value={selectedJabatan}
               onChange={(e) => setSelectedJabatan(e.target.value)}
               required
+              data-testid="jabatan-owner-edit"
             >
               {JABATAN_OPTIONS.map((jab) => (
                 <option key={jab} value={jab}>

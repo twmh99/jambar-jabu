@@ -192,6 +192,74 @@ export default function PayrollReport() {
   const formatJam = (value, fraction = 2) =>
     Number(value || 0).toFixed(fraction);
 
+  const exportPayrollPDF = () => {
+    if (!rows.length) {
+      toast.info("Tidak ada data untuk diekspor");
+      return;
+    }
+    const win = window.open("", "_blank");
+    if (!win) {
+      toast.error("Pop-up diblokir, izinkan pop-up untuk melanjutkan");
+      return;
+    }
+    const rowsHtml = rows
+      .map(
+        (r) =>
+          `<tr>
+            <td>${r.tanggal}</td>
+            <td>${r.pegawai}</td>
+            <td>${r.jam_kerja}</td>
+            <td>${r.rate}</td>
+            <td>${r.gaji_dasar}</td>
+            <td>${r.lembur}</td>
+            <td>${r.bonus_shift}</td>
+            <td>${r.penalti}</td>
+            <td>${r.tip}</td>
+            <td>${r.tip_group}</td>
+            <td>${r.total}</td>
+          </tr>`
+      )
+      .join("");
+    win.document.write(`
+      <html>
+        <head>
+          <title>Laporan Gaji &amp; Tip</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            h1 { font-size: 18px; margin-bottom: 12px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #d1d5db; padding: 8px; font-size: 12px; text-align: left; }
+            th { background: #f3f4f6; }
+          </style>
+        </head>
+        <body>
+          <h1>Laporan Gaji &amp; Tip ${from} s.d. ${to}</h1>
+          <table>
+            <thead>
+              <tr>
+                <th>Tanggal</th>
+                <th>Pegawai</th>
+                <th>Jam Kerja</th>
+                <th>Rate/Jam</th>
+                <th>Gaji Dasar</th>
+                <th>Lembur</th>
+                <th>Bonus Shift</th>
+                <th>Penalti</th>
+                <th>Tip</th>
+                <th>Tip Group</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </body>
+      </html>
+    `);
+    win.document.close();
+    win.focus();
+    win.print();
+  };
+
   return (
     <div className="space-y-6 animate-fadeIn">
       {/* ========================= FILTER ========================= */}
@@ -237,7 +305,7 @@ export default function PayrollReport() {
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex gap-2 items-center">
+            <div className="flex gap-2 items-center flex-wrap">
               <Button onClick={load} disabled={loading}>
                 {loading ? (
                   <>
@@ -251,10 +319,16 @@ export default function PayrollReport() {
               </Button>
 
               {rows.length > 0 && (
-                <DownloadButton
-                  filename={`payroll_${from}_sampai_${to}.csv`}
-                  rows={rows}
-                />
+                <>
+                  <DownloadButton
+                    filename={`payroll_${from}_sampai_${to}.csv`}
+                    rows={rows}
+                  />
+                  <Button type="button" onClick={exportPayrollPDF} className="ds-btn ds-btn-primary">
+                    <i className="fa-solid fa-file-pdf mr-2" />
+                    Ekspor PDF
+                  </Button>
+                </>
               )}
             </div>
 

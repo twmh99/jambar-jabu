@@ -51,7 +51,9 @@ export default function EmployeesBase({ role }) {
     }
     return opts;
   }, [isSupervisorContext, editId, editingJabatan]);
-  const disableJabatanSelect = !!(editId && editingJabatan === 'Supervisor');
+  // Owner boleh ubah Supervisor; Supervisor tidak boleh ubah Supervisor
+  const disableJabatanSelect =
+    isSupervisorContext && !!(editId && editingJabatan === 'Supervisor');
   const getPegawaiValue = (field) => (editId && editingPegawai ? editingPegawai[field] : undefined);
   const applyRoleRate = (jabatan) => {
     if (ROLE_RATE_MAP[jabatan] && hourlyRateRef.current) {

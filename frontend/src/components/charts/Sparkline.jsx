@@ -4,6 +4,7 @@ export const Sparkline = ({
   data = [],
   stroke = "hsl(var(--accent))",
   height = 180,
+  width = 380,
 }) => {
   if (!data.length) return null;
 
@@ -16,11 +17,13 @@ export const Sparkline = ({
   const values = pointsRaw.map((d) => Number(d.value) || 0);
   const labels = pointsRaw.map((d) => d.label);
 
-  const w = 420;
+  const w = width;
   const h = height;
-  const pad = 40;
-  const min = Math.min(...values);
-  const max = Math.max(...values);
+  const pad = 24;
+  const rawMin = Math.min(...values);
+  const rawMax = Math.max(...values);
+  const min = rawMin === rawMax ? Math.max(0, rawMin - 1) : rawMin;
+  const max = rawMin === rawMax ? rawMax + 1 : rawMax;
 
   // Koordinat titik grafik
   const span = Math.max(values.length - 1, 1);

@@ -81,6 +81,57 @@ export default function AttendanceReport() {
     load();
   }, [load]);
 
+  const exportPDF = () => {
+    if (!rows.length) {
+      toast.info("Tidak ada data untuk diekspor");
+      return;
+    }
+    const win = window.open("", "_blank");
+    if (!win) {
+      toast.error("Pop-up diblokir, izinkan pop-up untuk melanjutkan");
+      return;
+    }
+    const rowsHtml = rows
+      .map(
+        (r) =>
+          `<tr><td>${r.tanggal}</td><td>${r.pegawai}</td><td>${r.check_in}</td><td>${r.check_out}</td><td>${r.status}</td><td>${r.tips}</td></tr>`
+      )
+      .join("");
+    win.document.write(`
+      <html>
+        <head>
+          <title>Laporan Absensi</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; }
+            h1 { font-size: 18px; margin-bottom: 12px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #d1d5db; padding: 8px; font-size: 12px; text-align: left; }
+            th { background: #f3f4f6; }
+          </style>
+        </head>
+        <body>
+          <h1>Laporan Absensi ${from} s.d. ${to}</h1>
+          <table>
+            <thead>
+              <tr>
+                <th>Tanggal</th>
+                <th>Pegawai</th>
+                <th>Masuk</th>
+                <th>Pulang</th>
+                <th>Status</th>
+                <th>Tip</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </body>
+      </html>
+    `);
+    win.document.close();
+    win.focus();
+    win.print();
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -112,7 +163,13 @@ export default function AttendanceReport() {
                         : (<><i className="fa-solid fa-filter mr-2" /> Terapkan</>)}
             </Button>
             {rows.length > 0 && (
-              <DownloadButton filename={`absensi_${from}_sampai_${to}.csv`} rows={rows} />
+              <>
+                <DownloadButton filename={`absensi_${from}_sampai_${to}.csv`} rows={rows} />
+                <Button type="button" onClick={exportPDF} className="ds-btn ds-btn-primary">
+                  <i className="fa-solid fa-file-pdf mr-2" />
+                  Ekspor PDF
+                </Button>
+              </>
             )}
           </div>
         </CardContent>
