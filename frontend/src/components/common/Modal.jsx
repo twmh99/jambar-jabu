@@ -1,4 +1,5 @@
 import React from "react";
+import { createPortal } from "react-dom";
 
 export default function Modal({
   open,
@@ -9,19 +10,8 @@ export default function Modal({
 }) {
   if (!open) return null;
 
-  return (
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm overflow-hidden"
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        margin: 0,
-        padding: 0,
-      }}
-    >
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm m-0 p-0">
       {/* === Kontainer utama modal === */}
       <div
         className={`relative w-full ${maxWidth} mx-auto bg-[hsl(var(--card))] text-[hsl(var(--foreground))] rounded-2xl shadow-2xl border border-[hsl(var(--border))] animate-scaleIn overflow-hidden`}
@@ -42,11 +32,12 @@ export default function Modal({
         </div>
 
         {/* === Isi Modal === */}
-        <div className="p-6 overflow-y-auto overflow-x-hidden max-h-[75vh] [scrollbar-width:none]">
+        <div className="p-6 overflow-y-auto overflow-x-hidden max-h-[75vh] [scrollbar-width:none] modal-scroll">
           {children}
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

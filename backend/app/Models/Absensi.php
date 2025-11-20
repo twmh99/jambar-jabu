@@ -10,9 +10,8 @@ class Absensi extends Model
     use HasFactory;
 
     protected $table = 'absensi';
-    protected $fillable = [
-        'pegawai_id', 'tanggal', 'check_in', 'check_out', 'status', 'tip', 'verified'
-    ];
+    protected $fillable = ['pegawai_id', 'supervisor_id', 'tanggal', 'jam_masuk', 'jam_keluar', 'status', 'tip', 'shift'];
+
 
     protected $casts = [
         'verified' => 'boolean',
@@ -22,4 +21,11 @@ class Absensi extends Model
     {
         return $this->belongsTo(Pegawai::class, 'pegawai_id');
     }
+
+        public function supervisor()
+    {
+        return $this->belongsTo(User::class, 'supervisor_id');
+    }
+
+
 }

@@ -9,7 +9,14 @@ export default function ActionButtons({ onEdit, onDelete, onVerify }) {
         </button>
       )}
       {onDelete && (
-        <button onClick={onDelete} className="btn-delete">
+        <button
+          onClick={() => {
+            if (window.confirm("Hapus data ini?")) {
+              onDelete();
+            }
+          }}
+          className="btn-delete"
+        >
           <i className="fa-solid fa-trash" /> Hapus
         </button>
       )}

@@ -15,6 +15,25 @@ import { Input, Label, Select } from "../../components/ui/input";
 import api from "../../services/api";
 import { toast } from "../../components/ui/toast";
 
+const ROLE_RATE_MAP = {
+  Supervisor: 30000,
+  Koki: 27000,
+  Kasir: 25000,
+  Pelayan: 23000,
+  "Tukang Kebun": 20000,
+};
+const JABATAN_OPTIONS = [
+  "Supervisor",
+  "Koki",
+  "Kasir",
+  "Pelayan",
+  "Tukang Kebun",
+];
+const deriveRoleFromJabatan = (jabatan) =>
+  jabatan === "Supervisor" ? "supervisor" : "employee";
+const deriveRoleLabel = (jabatan) =>
+  jabatan === "Supervisor" ? "Supervisor" : "Pegawai";
+
 export default function OwnerDashboard() {
   const [summary, setSummary] = React.useState({
     total_pegawai: 0,
@@ -27,16 +46,23 @@ export default function OwnerDashboard() {
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [selectedPegawai, setSelectedPegawai] = React.useState(null);
+  const [editId, setEditId] = React.useState(null);
   const [detailOpen, setDetailOpen] = React.useState(false);
+  const [shiftStats, setShiftStats] = React.useState([]);
+  const [selectedJabatan, setSelectedJabatan] = React.useState(
+    JABATAN_OPTIONS[0]
+  );
+  const hourlyRateRef = React.useRef(null);
   const nav = useNavigate();
 
   /** 🔁 Load data dashboard (summary + pegawai) */
   const load = async () => {
     setLoading(true);
     try {
-      const [summaryRes, empRes] = await Promise.all([
+      const [summaryRes, empRes, shiftRes] = await Promise.all([
         api.get("/dashboard/summary"), // ganti endpoint sesuai backend Laravel
         api.get("/pegawai"),
+        api.get("/jadwal/week"),
       ]);
 
       const summaryData =
@@ -53,11 +79,37 @@ export default function OwnerDashboard() {
       const employeeList = Array.isArray(empRes.data)
         ? empRes.data
         : Array.isArray(empRes.data?.data)
-        ? empRes.data.data
-        : [];
+          ? empRes.data.data
+          : [];
+
+      const shiftRaw = Array.isArray(shiftRes.data)
+        ? shiftRes.data
+        : Array.isArray(shiftRes.data?.data)
+          ? shiftRes.data.data
+          : [];
+      const counts = shiftRaw.reduce((acc, item) => {
+        const label = item.shift || "Tanpa shift";
+        acc[label] = (acc[label] || 0) + 1;
+        return acc;
+      }, {});
+      let computedShift = Object.entries(counts).map(([label, value]) => ({
+        label,
+        value,
+      }));
+      if (
+        !computedShift.length &&
+        Array.isArray(summaryData.komposisi_shift) &&
+        summaryData.komposisi_shift.length
+      ) {
+        computedShift = summaryData.komposisi_shift.map((value, idx) => ({
+          label: `Shift ${idx + 1}`,
+          value,
+        }));
+      }
 
       setSummary(summaryData);
       setEmployees(employeeList);
+      setShiftStats(computedShift);
     } catch (err) {
       console.error("Dashboard load error:", err.response?.data || err.message);
       toast.error("Gagal memuat data dashboard");
@@ -70,30 +122,59 @@ export default function OwnerDashboard() {
     load();
   }, []);
 
+  React.useEffect(() => {
+    if (!open) return;
+    const preset =
+      ROLE_RATE_MAP[selectedJabatan] ?? ROLE_RATE_MAP.Supervisor ?? 20000;
+    if (hourlyRateRef.current && !editId) {
+      hourlyRateRef.current.value = preset;
+    }
+  }, [open, selectedJabatan, editId]);
+
   /** ➕ Tambah Pegawai */
   const addEmployee = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const data = Object.fromEntries(fd.entries());
+    const isEdit = Boolean(editId);
 
-    if (!data.nama || !data.jabatan || !data.telepon || !data.email) {
+    if (!data.nama || !data.jabatan || !data.telepon || (!isEdit && !data.email)) {
       toast.error("Lengkapi nama, jabatan, telepon, dan email!");
       return;
     }
 
     try {
       setLoading(true);
-      await api.post("/pegawai", {
-        nama: data.nama,
-        jabatan: data.jabatan,
-        telepon: data.telepon,
-        email: data.email,
-        role: data.role || "employee",
-        status: data.status || "Aktif",
-        hourly_rate: Number(data.hourly_rate || 20000),
-      });
-      toast.success(`Pegawai "${data.nama}" berhasil ditambahkan.`);
+      const normalizedJabatan = data.jabatan || selectedJabatan;
+      const resolvedHourly =
+        Number(data.hourly_rate) ||
+        ROLE_RATE_MAP[normalizedJabatan] ||
+        ROLE_RATE_MAP.Supervisor ||
+        20000;
+      if (editId) {
+        await api.put(`/pegawai/${editId}`, {
+          nama: data.nama,
+          jabatan: normalizedJabatan,
+          telepon: data.telepon,
+          status: data.status || "Aktif",
+          hourly_rate: resolvedHourly,
+        });
+        toast.success(`Pegawai "${data.nama}" berhasil diperbarui.`);
+      } else {
+        await api.post("/pegawai", {
+          nama: data.nama,
+          jabatan: normalizedJabatan,
+          telepon: data.telepon,
+          email: data.email,
+          role: deriveRoleFromJabatan(normalizedJabatan),
+          status: data.status || "Aktif",
+          hourly_rate: resolvedHourly,
+        });
+        toast.success(`Pegawai "${data.nama}" berhasil ditambahkan.`);
+      }
       setOpen(false);
+      setEditId(null);
+      setSelectedJabatan(JABATAN_OPTIONS[0]);
       e.target.reset();
       load();
     } catch (err) {
@@ -122,16 +203,15 @@ export default function OwnerDashboard() {
   };
 
   /** Data pie komposisi shift */
-  const pieData = React.useMemo(() => {
-    if (Array.isArray(summary.komposisi_shift)) return summary.komposisi_shift;
-    if (typeof summary.komposisi_shift === "object") {
-      return Object.entries(summary.komposisi_shift).map(([label, value]) => ({
-        label,
-        value,
-      }));
-    }
-    return [];
-  }, [summary.komposisi_shift]);
+  const pieValues = React.useMemo(
+    () => shiftStats.map((item) => item.value),
+    [shiftStats]
+  );
+  const pieLabels = React.useMemo(
+    () => shiftStats.map((item) => item.label),
+    [shiftStats]
+  );
+
 
   return (
     <div className="space-y-8 animate-fadeIn">
@@ -143,12 +223,14 @@ export default function OwnerDashboard() {
             value: summary.total_pegawai,
             icon: "fa-users",
             color: "accent",
+            path: "/owner/employees",
           },
           {
             label: "Absensi Bulan Ini",
             value: summary.absensi_bulan_ini,
             icon: "fa-calendar-check",
             color: "success",
+            path: "/owner/attendance",
           },
           {
             label: "Total Gaji (IDR)",
@@ -157,27 +239,30 @@ export default function OwnerDashboard() {
             ),
             icon: "fa-sack-dollar",
             color: "warning",
+            path: "/owner/payroll",
           },
         ].map((stat, i) => (
-          <div
+          <button
             key={i}
-            className={`bg-white shadow-md p-6 rounded-xl border-l-4 border-[hsl(var(--${stat.color}))] hover:shadow-lg transition-all`}
+            type="button"
+            onClick={() => stat.path && nav(stat.path)}
+            className="text-left rounded-[22px] border border-[hsl(var(--border))] shadow-[0px_10px_25px_rgba(15,23,42,0.1)] hover:shadow-[0px_16px_35px_rgba(15,23,42,0.18)] transition-all focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 bg-[hsl(var(--card))] text-[hsl(var(--foreground))]"
           >
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-sm text-gray-500">{stat.label}</p>
-                <h3 className="text-3xl font-semibold mt-1 text-[hsl(var(--primary))]">
+            <div className="flex flex-col gap-4 p-5">
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">{stat.label}</p>
+              <div className="flex items-center justify-between">
+                <h3 className="text-3xl font-semibold text-[hsl(var(--foreground))]">
                   {loading ? "..." : stat.value}
                 </h3>
-              </div>
-              <div
-                className={`text-3xl text-[hsl(var(--${stat.color}))]`}
-                aria-hidden
-              >
-                <i className={`fa-solid ${stat.icon}`} />
+                <div
+                  className={`w-10 h-10 rounded-full flex items-center justify-center bg-[hsl(var(--${stat.color}))/0.15] text-[hsl(var(--${stat.color}))] text-xl`}
+                  aria-hidden
+                >
+                  <i className={`fa-solid ${stat.icon}`} />
+                </div>
               </div>
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -185,13 +270,13 @@ export default function OwnerDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
           <CardHeader className="flex items-center justify-between">
-            <CardTitle className="text-[hsl(var(--primary))] font-semibold">
+            <CardTitle className="text-[hsl(var(--foreground))] font-semibold">
               Tren Kehadiran Mingguan
             </CardTitle>
             <Button
               variant="outline"
               onClick={() => nav("/owner/attendance")}
-              className="hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--primary))]"
+              className="hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--primary))] dark:hover:text-[hsl(var(--foreground))]"
             >
               <i className="fa-solid fa-table-list mr-2" />
               Lihat Laporan
@@ -199,39 +284,46 @@ export default function OwnerDashboard() {
           </CardHeader>
           <CardContent>
             {summary.tren_kehadiran?.length > 0 ? (
-              <Sparkline data={summary.tren_kehadiran} />
+              <Sparkline
+                data={summary.tren_kehadiran.map((d) => ({
+                  label: d.label,
+                  value: d.value,
+                }))}
+              />
+
             ) : (
-              <p className="text-gray-400 text-sm">Belum ada data kehadiran</p>
+              <p className="text-[hsl(var(--muted-foreground))] text-sm">Belum ada data kehadiran</p>
             )}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex items-center justify-between">
-            <CardTitle className="text-[hsl(var(--primary))] font-semibold">
+        <Card className="relative">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="text-[hsl(var(--foreground))] font-semibold">
               Komposisi Shift
             </CardTitle>
             <Button
               variant="outline"
               onClick={() => nav("/owner/analytics")}
-              className="hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--primary))]"
+              className="hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--primary))] dark:hover:text-[hsl(var(--foreground))] w-full sm:w-auto whitespace-nowrap justify-center"
             >
               <i className="fa-solid fa-chart-simple mr-2" />
               Analitik
             </Button>
           </CardHeader>
           <CardContent className="flex items-center justify-center">
-            {pieData.length > 0 ? (
+            {pieValues.length > 0 ? (
               <Pie
-                values={pieData}
+                values={pieValues}
+                labels={pieLabels}
                 colors={[
-                  "hsl(var(--accent))",
-                  "hsl(var(--primary))",
-                  "hsl(var(--muted-foreground))",
+                  "hsl(var(--foreground))", // selaraskan dengan judul card
+                  "hsl(var(--pie-2))",
+                  "hsl(var(--pie-3))",
                 ]}
               />
             ) : (
-              <p className="text-gray-400 text-sm">Belum ada data shift</p>
+              <p className="text-[hsl(var(--muted-foreground))] text-sm">Belum ada data shift</p>
             )}
           </CardContent>
         </Card>
@@ -240,25 +332,43 @@ export default function OwnerDashboard() {
       {/* ===== Daftar Pegawai ===== */}
       <Card>
         <CardHeader className="flex items-center justify-between">
-          <CardTitle className="text-[hsl(var(--primary))] font-semibold">
+          <CardTitle className="text-[hsl(var(--foreground))] font-semibold">
             Daftar Pegawai
           </CardTitle>
-          <Button
-            variant="accent"
-            onClick={() => setOpen(true)}
-            className="bg-[hsl(var(--accent))] text-[hsl(var(--primary))] hover:bg-yellow-400"
-          >
-            <i className="fa-solid fa-user-plus mr-2" /> Tambah Pegawai
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={load}
+              disabled={loading}
+              className="whitespace-nowrap dark:border-[hsl(var(--border))] dark:text-[hsl(var(--foreground))]"
+            >
+              {loading ? (
+                <>
+                  <i className="fa-solid fa-spinner animate-spin mr-2" /> Memuat...
+                </>
+              ) : (
+                <>
+                  <i className="fa-solid fa-arrows-rotate mr-2" /> Refresh
+                </>
+              )}
+            </Button>
+            <Button
+              variant="accent"
+              onClick={() => setOpen(true)}
+              className="bg-[hsl(var(--accent))] text-[hsl(var(--primary))] hover:bg-yellow-400"
+            >
+              <i className="fa-solid fa-user-plus mr-2" /> Tambah Pegawai
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
             <THead>
               <TR>
-                <TH>ID</TH>
-                <TH>Nama</TH>
-                <TH>Jabatan</TH>
-                <TH>Status</TH>
+                <TH className="text-[hsl(var(--foreground))]">ID</TH>
+                <TH className="text-[hsl(var(--foreground))]">Nama</TH>
+                <TH className="text-[hsl(var(--foreground))]">Jabatan</TH>
+                <TH className="text-[hsl(var(--foreground))]">Status</TH>
               </TR>
             </THead>
             <TBody>
@@ -269,9 +379,9 @@ export default function OwnerDashboard() {
                     onClick={() => showDetail(e)}
                     className="hover:bg-[hsl(var(--muted))]/20 cursor-pointer transition-all"
                   >
-                    <TD className="font-mono text-xs text-gray-500">{e.id}</TD>
-                    <TD>{e.nama}</TD>
-                    <TD>{e.jabatan}</TD>
+                    <TD className="font-mono text-xs text-[hsl(var(--muted-foreground))]">{e.id}</TD>
+                    <TD className="text-[hsl(var(--foreground))]">{e.nama}</TD>
+                    <TD className="text-[hsl(var(--foreground))]">{e.jabatan}</TD>
                     <TD>
                       <span
                         className={
@@ -297,51 +407,90 @@ export default function OwnerDashboard() {
         </CardContent>
       </Card>
 
-      {/* ===== Modal Tambah Pegawai ===== */}
-      <Modal open={open} title="Tambah Pegawai" onClose={() => setOpen(false)}>
+      {/* ===== Modal Tambah / Edit Pegawai ===== */}
+      <Modal
+        open={open}
+        title={editId ? "Edit Pegawai" : "Tambah Pegawai"}
+        onClose={() => {
+          setOpen(false);
+          setEditId(null);
+        }}
+      >
         <form
+          key={editId || "new"}
           onSubmit={addEmployee}
           className="grid grid-cols-1 sm:grid-cols-2 gap-4"
         >
           <div className="sm:col-span-2">
             <Label>Nama</Label>
-            <Input name="nama" required />
+            <Input name="nama" required defaultValue={editId ? selectedPegawai?.nama : ""} />
           </div>
           <div>
             <Label>Jabatan</Label>
-            <Input name="jabatan" required />
-          </div>
-          <div>
-            <Label>Telepon</Label>
-            <Input name="telepon" required />
-          </div>
-          <div>
-            <Label>Email (Login)</Label>
-            <Input type="email" name="email" required />
-          </div>
-          <div>
-            <Label>Role</Label>
-            <Select name="role" defaultValue="employee">
-              <option value="employee">Pegawai</option>
-              <option value="supervisor">Supervisor</option>
-              <option value="owner">Owner</option>
+            <Select
+              name="jabatan"
+              value={selectedJabatan}
+              onChange={(e) => setSelectedJabatan(e.target.value)}
+              required
+            >
+              {JABATAN_OPTIONS.map((jab) => (
+                <option key={jab} value={jab}>
+                  {jab}
+                </option>
+              ))}
             </Select>
           </div>
           <div>
+            <Label>Telepon</Label>
+            <Input name="telepon" required defaultValue={editId ? selectedPegawai?.telepon : ""} />
+          </div>
+          <div>
+            <Label>Email (Login)</Label>
+            <Input
+              type="email"
+              name="email"
+              required={!editId}
+              defaultValue={editId ? selectedPegawai?.email : ""}
+              disabled={Boolean(editId)}
+            />
+          </div>
+          <div>
+            <Label>Role</Label>
+            <Input
+              value={deriveRoleLabel(selectedJabatan)}
+              readOnly
+              className="bg-[hsl(var(--muted))]"
+            />
+          </div>
+          <div>
             <Label>Status</Label>
-            <Select name="status" defaultValue="Aktif">
+            <Select
+              name="status"
+              defaultValue={editId ? selectedPegawai?.status || "Aktif" : "Aktif"}
+            >
               <option>Aktif</option>
               <option>Nonaktif</option>
             </Select>
           </div>
           <div>
             <Label>Tarif/Jam (IDR)</Label>
-            <Input type="number" name="hourly_rate" defaultValue={20000} />
+            <Input
+              type="number"
+              name="hourly_rate"
+              min="0"
+              step="1000"
+              ref={hourlyRateRef}
+              defaultValue={
+                editId
+                  ? selectedPegawai?.hourly_rate || ROLE_RATE_MAP.Supervisor
+                  : ROLE_RATE_MAP.Supervisor
+              }
+            />
           </div>
           <div className="sm:col-span-2 flex justify-end gap-2 pt-2">
             <Button
               type="button"
-              variant="outline"
+              variant="neutral"
               onClick={() => setOpen(false)}
             >
               Batal
@@ -360,60 +509,93 @@ export default function OwnerDashboard() {
         onClose={() => setDetailOpen(false)}
       >
         {selectedPegawai ? (
-          <div className="max-h-[70vh] overflow-y-auto space-y-5 text-[15px]">
-            <div className="flex flex-col items-center text-center">
-              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#38bdf8] to-[#06b6d4] flex items-center justify-center text-white text-3xl font-semibold shadow-lg">
-                {selectedPegawai.nama?.charAt(0)?.toUpperCase() || "?"}
-              </div>
-              <h2 className="mt-3 text-lg font-semibold">
-                {selectedPegawai.nama}
-              </h2>
+          <div className="max-h-[70vh] overflow-y-auto space-y-6 text-[15px]">
+          <div className="flex flex-col items-center gap-1 text-center">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#38bdf8] to-[#0ea5e9] flex items-center justify-center text-white text-3xl font-semibold shadow-lg">
+              {selectedPegawai.nama?.charAt(0)?.toUpperCase() || "?"}
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold">{selectedPegawai.nama}</h2>
               <p className="text-[hsl(var(--muted-foreground))]">
                 {selectedPegawai.jabatan || "—"}
               </p>
             </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setDetailOpen(false);
+                setEditId(selectedPegawai.id);
+                setSelectedJabatan(selectedPegawai.jabatan || JABATAN_OPTIONS[0]);
+                setOpen(true);
+              }}
+              className="mt-2 inline-flex items-center gap-2 px-4"
+            >
+              <i className="fa-solid fa-pen" />
+              Edit
+              </Button>
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="p-3 rounded-xl border bg-[hsl(var(--card))] shadow-sm">
-                <strong className="block text-xs text-gray-500">Telepon</strong>
-                <span>{selectedPegawai.telepon || "-"}</span>
-              </div>
-              <div className="p-3 rounded-xl border bg-[hsl(var(--card))] shadow-sm">
-                <strong className="block text-xs text-gray-500">Email</strong>
-                <span>{selectedPegawai.email || "-"}</span>
-              </div>
-              <div className="p-3 rounded-xl border bg-[hsl(var(--card))] shadow-sm">
-                <strong className="block text-xs text-gray-500">Role</strong>
-                <span className="capitalize">
-                  {selectedPegawai.role || "-"}
-                </span>
-              </div>
-              <div className="p-3 rounded-xl border bg-[hsl(var(--card))] shadow-sm">
-                <strong className="block text-xs text-gray-500">Status</strong>
-                <span
-                  className={`ds-badge ${
-                    selectedPegawai.status === "Aktif"
-                      ? "bg-[hsl(var(--success))] text-white"
-                      : "bg-[hsl(var(--muted))]"
-                  }`}
+              {[
+                { label: "Telepon", value: selectedPegawai.telepon || "-" },
+                { label: "Email", value: selectedPegawai.email || "-" },
+                {
+                  label: "Role",
+                  value: (() => {
+                    const rawRole = (selectedPegawai.role || "").toString().toLowerCase();
+                    if (rawRole === "employee") return "Pegawai";
+                    if (rawRole === "supervisor") return "Supervisor";
+                    if (rawRole === "owner") return "Owner";
+                    return rawRole || "-";
+                  })(),
+                },
+                {
+                  label: "Status",
+                  value: (
+                    <span
+                      className={`ds-badge ${
+                        selectedPegawai.status === "Aktif"
+                          ? "bg-[hsl(var(--success))] text-white"
+                          : "bg-[hsl(var(--muted))]"
+                      }`}
+                    >
+                      {selectedPegawai.status || "-"}
+                    </span>
+                  ),
+                },
+              ].map((field, idx) => (
+                <div
+                  key={idx}
+                  className="p-4 rounded-xl border bg-[hsl(var(--card))] shadow-sm flex flex-col gap-1"
                 >
-                  {selectedPegawai.status}
-                </span>
-              </div>
-              <div className="sm:col-span-2 p-3 rounded-xl border bg-[hsl(var(--card))] shadow-sm">
-                <strong className="block text-xs text-gray-500">
+                  <span className="text-xs font-semibold tracking-wide text-gray-500">
+                    {field.label}
+                  </span>
+                  <span className="text-[hsl(var(--foreground))]">{field.value}</span>
+                </div>
+              ))}
+              <div className="sm:col-span-2 p-4 rounded-xl border bg-[hsl(var(--card))] shadow-sm flex flex-col gap-1">
+                <span className="text-xs font-semibold tracking-wide text-gray-500">
                   Tarif/Jam
-                </strong>
+                </span>
                 <span>
-                  Rp {selectedPegawai.hourly_rate?.toLocaleString("id-ID") || 0}
+                  Rp{" "}
+                  {selectedPegawai.hourly_rate
+                    ? selectedPegawai.hourly_rate.toLocaleString("id-ID")
+                    : "0"}
                 </span>
               </div>
             </div>
 
             <div className="flex justify-end pt-2">
-              <Button variant="outline" onClick={() => setDetailOpen(false)}>
+              <button
+                type="button"
+                className="btn-neutral"
+                onClick={() => setDetailOpen(false)}
+              >
                 Tutup
-              </Button>
+              </button>
             </div>
           </div>
         ) : (

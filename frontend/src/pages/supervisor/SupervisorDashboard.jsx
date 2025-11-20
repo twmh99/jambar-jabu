@@ -1,5 +1,4 @@
 import React from "react";
-import SelectSearch from "react-select";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Table, TBody, THead, TH, TR, TD } from "../../components/ui/table";
@@ -7,104 +6,259 @@ import { Input, Label } from "../../components/ui/input";
 import Modal from "../../components/common/Modal";
 import { toast } from "../../components/ui/toast";
 import api from "../../services/api";
+import { Sparkline } from "../../components/charts/Sparkline";
+import { useNavigate } from "react-router-dom";
+
+const shiftTimes = {
+  Pagi: { jam_mulai: "09:00", jam_selesai: "14:00" },
+  Siang: { jam_mulai: "14:00", jam_selesai: "19:00" },
+  Malam: { jam_mulai: "19:00", jam_selesai: "00:00" },
+};
+
+const truncate = (text, length = 32) => {
+  if (!text) return "—";
+  return text.length > length ? `${text.slice(0, length)}…` : text;
+};
+
+const summarizeToday = (jadwal = [], absensi = []) => {
+  const activeShifts = new Set(jadwal.map((x) => `${x.shift}-${x.tanggal}`)).size;
+  const present = absensi.filter((x) => (x.status || "").toLowerCase() === "hadir").length;
+  const late = absensi.filter((x) => (x.status || "").toLowerCase() === "terlambat").length;
+  return { activeShifts, present, late };
+};
+
+const parseSeconds = (time = "00:00:00") => {
+  const [h = 0, m = 0, s = 0] = time.split(":").map((val) => parseInt(val || "0", 10));
+  return h * 3600 + m * 60 + s;
+};
+
+const calculateOvertimeHours = (records = []) => {
+  const now = new Date();
+  const weekAgo = new Date(now);
+  weekAgo.setDate(now.getDate() - 7);
+
+  const total = records.reduce((acc, record) => {
+    if (!record.tanggal || !record.jam_masuk || !record.jam_keluar) return acc;
+    const date = new Date(record.tanggal);
+    if (date < weekAgo) return acc;
+    const start = parseSeconds(record.jam_masuk);
+    let end = parseSeconds(record.jam_keluar);
+    if (end < start) end += 24 * 3600;
+    const hours = Math.max(0, (end - start) / 3600);
+    const overtime = Math.max(0, hours - 8);
+    return acc + overtime;
+  }, 0);
+
+  return Math.round(total * 10) / 10;
+};
+
+const buildAttendanceTrend = (records = []) => {
+  if (!records.length) return [];
+  const now = new Date();
+  const weekAgo = new Date(now);
+  weekAgo.setDate(now.getDate() - 6);
+  const daily = {};
+  records.forEach((r) => {
+    if (!r.tanggal) return;
+    const date = new Date(r.tanggal);
+    if (date < weekAgo) return;
+    const key = r.tanggal;
+    daily[key] = daily[key] || 0;
+    if ((r.status || "").toLowerCase() === "hadir") {
+      daily[key] += 1;
+    }
+  });
+  return Object.keys(daily)
+    .sort()
+    .map((key) => ({
+      label: new Date(key).toLocaleDateString("id-ID", { weekday: "short" }),
+      value: daily[key],
+    }));
+};
 
 export default function SupervisorDashboard() {
-  // ⏱ waktu realtime (sekaligus jadi header seperti di employee)
+  const navigate = useNavigate();
   const [time, setTime] = React.useState(new Date());
-
-  // ringkasan kecil (dibangun dari /jadwal/today dan /absensi/today)
-  const [summary, setSummary] = React.useState({
-    activeShifts: 0,
-    present: 0,
-    late: 0,
-  });
-
+  const [summary, setSummary] = React.useState({ activeShifts: 0, present: 0, late: 0 });
   const [schedules, setSchedules] = React.useState([]);
   const [modalAdd, setModalAdd] = React.useState(false);
   const [modalVerify, setModalVerify] = React.useState(false);
   const [pendingVerify, setPendingVerify] = React.useState([]);
-
-  // daftar pegawai untuk dropdown saat membuat jadwal
   const [employees, setEmployees] = React.useState([]);
   const [pegawaiId, setPegawaiId] = React.useState("");
+  const [metrics, setMetrics] = React.useState({
+    validatedSchedules: 0,
+    pendingRequests: 0,
+    overtimeHours: 0,
+  });
+  const [attendanceTrend, setAttendanceTrend] = React.useState([]);
+  const [absensiToday, setAbsensiToday] = React.useState([]);
+  const [verifyDetailOpen, setVerifyDetailOpen] = React.useState(false);
+  const [verifyDetailLoading, setVerifyDetailLoading] = React.useState(false);
+  const [verifyDetail, setVerifyDetail] = React.useState(null);
+  const [pullHint, setPullHint] = React.useState(0);
+  const pullHintRef = React.useRef(0);
+  const isRefreshing = React.useRef(false);
+  const employeeOptions = React.useMemo(
+    () =>
+      employees.map((p) => ({
+        value: p.id,
+        label: `${p.nama} (${p.jabatan || "Tanpa jabatan"})`,
+      })),
+    [employees]
+  );
 
-  // 🕒 update jam per detik
+  const pegawaiMap = React.useMemo(() => {
+    const map = new Map();
+    employees.forEach((p) => map.set(p.id, p));
+    return map;
+  }, [employees]);
+
+  const downloadAttendanceCSV = () => {
+    if (!absensiToday.length) {
+      toast.info("Belum ada data absensi hari ini.");
+      return;
+    }
+    const header = ["Nama", "Shift", "Jam Masuk", "Jam Keluar", "Status"];
+    const csvRows = absensiToday.map((r) => [
+      r.nama || "-",
+      r.shift || "-",
+      r.jam_masuk || "-",
+      r.jam_keluar || "-",
+      r.status || "-",
+    ]);
+    const csvContent = [header, ...csvRows].map((row) => row.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "laporan_absensi_hari_ini.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   React.useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // === LOADERS ===
-  const loadEmployees = async () => {
+  const loadAll = React.useCallback(async () => {
     try {
-      const res = await api.get("/pegawai");
-      // ✅ ambil data yang benar
-      const list = Array.isArray(res.data?.data) ? res.data.data : res.data;
-      console.log("Data pegawai dari API:", res.data);
-      setEmployees(list || []);
-      if (list?.length && !pegawaiId) setPegawaiId(String(list[0].id));
-    } catch (err) {
-      console.error("Gagal memuat daftar pegawai:", err);
-      toast.error("Gagal memuat daftar pegawai");
-    }
-  };
-
-  const loadSchedules = async () => {
-    try {
-      const res = await api.get("/jadwal/today");
-      setSchedules(Array.isArray(res.data) ? res.data : []);
-    } catch {
-      toast.error("Gagal memuat jadwal hari ini");
-    }
-  };
-
-  const loadPendingVerify = async () => {
-    try {
-      const res = await api.get("/absensi/pending");
-      setPendingVerify(Array.isArray(res.data) ? res.data : []);
-    } catch {
-      toast.error("Gagal memuat daftar verifikasi");
-    }
-  };
-
-  const loadSummary = async () => {
-    try {
-      const [jadwal, absensi] = await Promise.all([
+      const [jadwalToday, absTodayRes, allEmployees, pending, absensiAllRes] = await Promise.all([
         api.get("/jadwal/today"),
         api.get("/absensi/today"),
+        api.get("/pegawai"),
+        api.get("/absensi/pending"),
+        api.get("/absensi"),
       ]);
 
-      const arrJ = Array.isArray(jadwal.data) ? jadwal.data : [];
-      const arrA = Array.isArray(absensi.data) ? absensi.data : [];
+      const jadwalData = Array.isArray(jadwalToday.data) ? jadwalToday.data : [];
+      const absensiData = Array.isArray(absTodayRes.data) ? absTodayRes.data : [];
+      const employeeList = Array.isArray(allEmployees.data?.data)
+        ? allEmployees.data.data
+        : Array.isArray(allEmployees.data)
+        ? allEmployees.data
+        : [];
+      const pendingRows = Array.isArray(pending.data) ? pending.data : [];
+      const absensiFull = Array.isArray(absensiAllRes.data?.data)
+        ? absensiAllRes.data.data
+        : Array.isArray(absensiAllRes.data)
+        ? absensiAllRes.data
+        : [];
 
-      const activeShifts = new Set(arrJ.map((x) => x.shift).filter(Boolean)).size;
-      const present = arrA.filter((x) => (x.status || "").toLowerCase() === "hadir").length;
-      const late = arrA.filter((x) => (x.status || "").toLowerCase() === "terlambat").length;
+      setSchedules(jadwalData);
+      setPendingVerify(pendingRows);
+      setEmployees(employeeList);
+      if (employeeList.length && !pegawaiId) setPegawaiId(String(employeeList[0].id));
+      setSummary(summarizeToday(jadwalData, absensiData));
+      setAbsensiToday(absensiData);
 
-      setSummary({ activeShifts, present, late });
-    } catch {
-      // kalau gagal, biarkan nilai tetap
+      const scheduledPegawai = new Set(jadwalData.map((s) => s.pegawai_id)).size;
+      const pendingRequests = Math.max(employeeList.length - scheduledPegawai, 0);
+      const overtimeHours = calculateOvertimeHours(absensiFull);
+      setMetrics({
+        validatedSchedules: jadwalData.length,
+        pendingRequests,
+        overtimeHours,
+      });
+      try {
+        const badgePayload = {
+          "/supervisor/rekap": pendingRows.length,
+          "/supervisor/jadwal": pendingRequests,
+        };
+        localStorage.setItem("smpj_supervisor_nav_badges", JSON.stringify(badgePayload));
+        window.dispatchEvent(new Event("smpj-nav-badges-update"));
+      } catch (err) {
+        console.warn("Failed to update nav badges", err);
+      }
+      setAttendanceTrend(buildAttendanceTrend(absensiFull));
+    } catch (err) {
+      console.error("Supervisor dashboard load error:", err?.response?.data || err.message);
+      toast.error("Gagal sinkron dengan data terbaru");
     }
-  };
+  }, [pegawaiId]);
 
   React.useEffect(() => {
-    loadEmployees();
-    loadSchedules();
-    loadSummary();
-  }, []);
+    loadAll();
+  }, [loadAll]);
 
-  // === ACTIONS ===
+  React.useEffect(() => {
+    const startY = { current: null };
+    const threshold = 80;
+
+    const handleTouchStart = (e) => {
+      if (window.scrollY === 0) {
+        startY.current = e.touches[0].clientY;
+      } else {
+        startY.current = null;
+      }
+      setPullHint(0);
+    };
+
+    const handleTouchMove = (e) => {
+      if (startY.current !== null) {
+        const dist = e.touches[0].clientY - startY.current;
+        if (dist > 0) {
+          const next = Math.min(dist, 120);
+          pullHintRef.current = next;
+          setPullHint(next);
+        }
+      }
+    };
+
+    const handleTouchEnd = async () => {
+      if (pullHintRef.current > threshold && !isRefreshing.current) {
+        isRefreshing.current = true;
+        navigator.vibrate?.(25);
+        await loadAll();
+        toast.info("Dashboard diperbarui");
+        isRefreshing.current = false;
+      }
+      pullHintRef.current = 0;
+      setPullHint(0);
+      startY.current = null;
+    };
+
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchmove", handleTouchMove, { passive: true });
+    window.addEventListener("touchend", handleTouchEnd);
+    return () => {
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [loadAll]);
+
   const createSchedule = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    const data = Object.fromEntries(fd.entries());
-
     const payload = {
-      pegawai_id: data.pegawai_id || pegawaiId,
-      tanggal: data.tanggal,
-      shift: data.shift,
-      jam_mulai: data.jam_mulai,
-      jam_selesai: data.jam_selesai,
+      pegawai_id: fd.get("pegawai_id") || pegawaiId,
+      tanggal: fd.get("tanggal"),
+      shift: fd.get("shift"),
+      jam_mulai: fd.get("jam_mulai"),
+      jam_selesai: fd.get("jam_selesai"),
     };
 
     if (!payload.pegawai_id || !payload.tanggal || !payload.shift || !payload.jam_mulai || !payload.jam_selesai) {
@@ -116,11 +270,9 @@ export default function SupervisorDashboard() {
       await api.post("/jadwal", payload);
       toast.success("Jadwal berhasil dibuat");
       setModalAdd(false);
-      await loadSchedules();
-      await loadSummary();
+      loadAll();
     } catch (err) {
-      const msg = err?.response?.data?.message || "Gagal membuat jadwal";
-      toast.error(msg);
+      toast.error(err?.response?.data?.message || "Gagal membuat jadwal");
     }
   };
 
@@ -128,18 +280,34 @@ export default function SupervisorDashboard() {
     try {
       await api.post(`/absensi/verify/${id}`);
       toast.success("Absensi diverifikasi");
-      await loadPendingVerify();
-      await loadSummary();
+      loadAll();
     } catch {
       toast.error("Gagal memverifikasi");
     }
   };
 
-  // jam otomatis per shift
-  const shiftTimes = {
-    Pagi: { jam_mulai: "09:00", jam_selesai: "14:00" },
-    Siang: { jam_mulai: "14:00", jam_selesai: "19:00" },
-    Malam: { jam_mulai: "19:00", jam_selesai: "00:00" },
+  const openVerifyDetail = async (row) => {
+    setVerifyDetailOpen(true);
+    setVerifyDetail(null);
+    setVerifyDetailLoading(true);
+    try {
+      const res = await api.get(`/absensi/${row.id}`);
+      const data = res.data || {};
+      const pegawaiInfo = pegawaiMap.get(data.pegawai_id) || {};
+      setVerifyDetail({
+        ...row,
+        ...data,
+        nama: pegawaiInfo.nama || row.nama || `Pegawai #${data.pegawai_id}`,
+        jabatan: pegawaiInfo.jabatan,
+        foto_url: data.foto_url || data.foto || row.foto_url,
+      });
+    } catch (err) {
+      console.error("Detail absensi error:", err);
+      toast.error("Gagal memuat detail absensi");
+      setVerifyDetail({ ...row });
+    } finally {
+      setVerifyDetailLoading(false);
+    }
   };
 
   return (
@@ -158,6 +326,12 @@ export default function SupervisorDashboard() {
         </div>
       </div>
 
+      {pullHint > 0 && (
+        <div className="text-center text-xs text-[hsl(var(--muted-foreground))] -mt-2">
+          {pullHint > 80 ? "Lepas untuk refresh" : "Tarik ke bawah untuk refresh"}
+        </div>
+      )}
+
       {/* ===== ACTION BUTTONS ===== */}
       <div className="flex justify-end gap-2">
         <Button variant="accent" onClick={() => setModalAdd(true)}>
@@ -166,7 +340,6 @@ export default function SupervisorDashboard() {
         <button
           onClick={() => {
             setModalVerify(true);
-            loadPendingVerify();
           }}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-600 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-[#1e293b]/80 dark:hover:text-emerald-300 transition-all duration-200"
         >
@@ -193,6 +366,58 @@ export default function SupervisorDashboard() {
           <CardContent className="pt-6">
             <div className="text-sm text-[hsl(var(--muted-foreground))]">Pegawai Terlambat</div>
             <div className="text-4xl font-semibold text-[hsl(var(--warning))]">{summary.late}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-sm text-[hsl(var(--muted-foreground))]">Jadwal Tervalidasi</div>
+            <div className="text-4xl font-semibold text-sky-600">{metrics.validatedSchedules}</div>
+            <p className="text-xs text-sky-600 mt-1">Total jadwal yang berjalan hari ini</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-sm text-[hsl(var(--muted-foreground))]">Permintaan Jadwal Baru</div>
+            <div className="text-4xl font-semibold text-rose-600">{metrics.pendingRequests}</div>
+            <p className="text-xs text-rose-600 mt-1">Pegawai tanpa jadwal hari ini</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-sm text-[hsl(var(--muted-foreground))]">Jam Overtime Pekan Ini</div>
+            <div className="text-4xl font-semibold text-emerald-600">{metrics.overtimeHours}</div>
+            <p className="text-xs text-emerald-600 mt-1">Jam lembur total 7 hari terakhir</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>Tren Kehadiran Mingguan</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {attendanceTrend.length > 0 ? (
+              <Sparkline data={attendanceTrend} height={160} />
+            ) : (
+              <p className="text-sm text-muted-foreground">Belum ada data tren.</p>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Aksi Cepat</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <Button onClick={() => navigate("/supervisor/jadwal?view=week")}>
+              <i className="fa-solid fa-calendar-week mr-2" /> Lihat Jadwal Minggu Depan
+            </Button>
+            <Button variant="outline" onClick={downloadAttendanceCSV}>
+              <i className="fa-solid fa-file-arrow-down mr-2" /> Unduh Laporan Absensi Hari Ini
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -239,17 +464,23 @@ export default function SupervisorDashboard() {
           {/* === PEGAWAI === */}
           <div>
             <Label>Pegawai</Label>
-            <SelectSearch
-              classNamePrefix="react-select"
-              placeholder="Cari nama pegawai..."
-              options={employees.map((p) => ({
-                value: p.id,
-                label: `${p.nama} (${p.jabatan || "Tanpa jabatan"})`,
-              }))}
-              value={employees.find((e) => e.id === parseInt(pegawaiId))}
-              onChange={(option) => setPegawaiId(option?.value || "")}
-              isSearchable
-            />
+            <select
+              name="pegawai_id"
+              className="ds-input w-full"
+              value={pegawaiId}
+              onChange={(e) => {
+                setPegawaiId(e.target.value);
+                e.target.blur();
+              }}
+              required
+            >
+              <option value="">Pilih pegawai</option>
+              {employeeOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* === SHIFT === */}
@@ -267,6 +498,7 @@ export default function SupervisorDashboard() {
                   document.querySelector('input[name="jam_mulai"]').value = jam_mulai;
                   document.querySelector('input[name="jam_selesai"]').value = jam_selesai;
                 }
+                e.target.blur();
               }}
             >
               <option value="" disabled>Pilih shift</option>
@@ -298,7 +530,7 @@ export default function SupervisorDashboard() {
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => setModalAdd(false)}>
+            <Button type="button" variant="neutral" onClick={() => setModalAdd(false)}>
               Batal
             </Button>
             <Button type="submit">Simpan</Button>
@@ -318,20 +550,27 @@ export default function SupervisorDashboard() {
             </TR>
           </THead>
           <TBody>
-            {pendingVerify.map((p, i) => (
-              <TR key={i}>
+            {pendingVerify.map((p) => (
+              <TR key={p.id}>
                 <TD>{p.nama}</TD>
                 <TD>{p.waktu}</TD>
                 <TD>{p.status}</TD>
-                <TD>
-                <button
-                  onClick={() => verifyAttendance(p.id)}
-                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-green-100 hover:shadow-md hover:shadow-emerald-200/40 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-[#1e293b]/80 dark:hover:shadow-emerald-400/30 dark:hover:text-emerald-300 transition-all duration-300"
-                  title="Verifikasi Absensi"
-                >
-                  <i className="fa-solid fa-circle-check text-green-500 dark:text-emerald-400" />
-                  <span>Verifikasi</span>
-                </button>
+                <TD className="flex gap-2">
+                  <button
+                    onClick={() => openVerifyDetail(p)}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-[#1e293b]/80 transition"
+                  >
+                    <i className="fa-solid fa-eye" />
+                    Detail
+                  </button>
+                  <button
+                    onClick={() => verifyAttendance(p.id)}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-green-100 hover:shadow-md hover:shadow-emerald-200/40 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-[#1e293b]/80 dark:hover:shadow-emerald-400/30 dark:hover:text-emerald-300 transition-all duration-300"
+                    title="Verifikasi Absensi"
+                  >
+                    <i className="fa-solid fa-circle-check text-green-500 dark:text-emerald-400" />
+                    <span>Verifikasi</span>
+                  </button>
                 </TD>
               </TR>
             ))}
@@ -344,6 +583,100 @@ export default function SupervisorDashboard() {
             )}
           </TBody>
         </Table>
+      </Modal>
+
+      <Modal
+        open={verifyDetailOpen}
+        title="Detail Absensi"
+        onClose={() => setVerifyDetailOpen(false)}
+        maxWidth="max-w-3xl"
+      >
+        {verifyDetailLoading ? (
+          <p className="text-center text-sm text-[hsl(var(--muted-foreground))]">
+            Memuat data…
+          </p>
+        ) : verifyDetail ? (
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <p className="text-xs text-[hsl(var(--muted-foreground))] uppercase">
+                  Nama Pegawai
+                </p>
+                <p className="text-lg font-semibold">{verifyDetail.nama}</p>
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                  {verifyDetail.jabatan || "—"}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-[hsl(var(--muted-foreground))] uppercase">Shift</p>
+                <p className="text-lg font-semibold">{verifyDetail.shift || "—"}</p>
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                  Status: {verifyDetail.status || "—"}
+                </p>
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">Tanggal</p>
+                <p className="font-medium">{verifyDetail.tanggal || "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">Jam Masuk</p>
+                <p className="font-medium">{verifyDetail.jam_masuk || verifyDetail.waktu || "—"}</p>
+              </div>
+              <div>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">Jam Keluar</p>
+                <p className="font-medium">{verifyDetail.jam_keluar || "Belum tercatat"}</p>
+              </div>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="border border-dashed border-[hsl(var(--border))] rounded-lg p-4">
+                <p className="text-sm font-semibold mb-2">Foto Bukti</p>
+                {verifyDetail.foto_url ? (
+                  <img
+                    src={verifyDetail.foto_url}
+                    alt="Bukti absensi"
+                    className="rounded-md w-full max-h-64 object-cover"
+                  />
+                ) : (
+                  <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                    Tidak ada foto yang diunggah.
+                  </p>
+                )}
+              </div>
+              <div className="border border-dashed border-[hsl(var(--border))] rounded-lg p-4">
+                <p className="text-sm font-semibold mb-2">Lokasi / Koordinat</p>
+                {verifyDetail.latitude && verifyDetail.longitude ? (
+                  <div className="space-y-2 text-sm">
+                    <p>
+                      Lat: <span className="font-mono">{verifyDetail.latitude}</span>
+                      <br />
+                      Lng: <span className="font-mono">{verifyDetail.longitude}</span>
+                    </p>
+                    <a
+                      href={`https://maps.google.com/?q=${verifyDetail.latitude},${verifyDetail.longitude}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="ds-btn ds-btn-outline text-xs"
+                    >
+                      Buka di Google Maps
+                    </a>
+                  </div>
+                ) : verifyDetail.lokasi ? (
+                  <p className="text-sm">{truncate(verifyDetail.lokasi, 80)}</p>
+                ) : (
+                  <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                    Koordinat atau nama lokasi tidak tersedia.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p className="text-center text-sm text-[hsl(var(--muted-foreground))]">
+            Data absensi tidak ditemukan.
+          </p>
+        )}
       </Modal>
     </div>
   );

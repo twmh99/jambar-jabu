@@ -30,6 +30,7 @@
 
     /* Border & elevation */
     --ring: 46 82% 52%;
+    --input-focus: 194 95% 55%; /* Aqua for focus states */
     --border: 214 15% 88%;
     --input: 214 15% 88%;
 
@@ -55,6 +56,7 @@
     --accent: 46 82% 56%;
     --border: 220 16% 18%;
     --input: 220 16% 18%;
+    --input-focus: 194 95% 60%;
   }
 
   html, body, #root {
@@ -75,13 +77,13 @@
   }
 
   ::selection {
-    background: hsl(var(--accent) / 0.25);
-    color: hsl(var(--foreground));
+    background: #1d4ed8;
+    color: #fff;
   }
 
   *:focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px hsl(var(--ring) / 0.45);
+    box-shadow: 0 0 0 3px hsl(var(--input-focus) / 0.4);
     border-radius: 6px;
     transition: box-shadow var(--transition-smooth);
   }
@@ -128,7 +130,29 @@
   }
 
   .ds-input {
-    @apply w-full rounded-[var(--radius-sm)] border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm placeholder:text-[hsl(var(--muted-foreground))] focus:ring-2 focus:ring-[hsl(var(--ring))] outline-none transition;
+    @apply w-full rounded-[var(--radius-sm)] border border-[hsl(var(--input))] bg-[hsl(var(--background))] px-3 py-2 text-sm placeholder:text-[hsl(var(--muted-foreground))] outline-none transition;
+  }
+
+  .rs-select__control {
+    border-radius: var(--radius-sm) !important;
+  }
+
+  .rs-select__input {
+    color: hsl(var(--foreground));
+  }
+
+  .rs-select__input input {
+    background: transparent !important;
+    color: inherit !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  .ds-input::selection,
+  select.ds-input::selection,
+  textarea.ds-input::selection {
+    background-color: #1d4ed8;
+    color: #fff;
   }
 
   .ds-label {
@@ -152,7 +176,7 @@
   /* Icon hover fix */
   button i.fa-solid {
     font-size: 14px;
-    color: hsl(var(--primary));
+    color: currentColor;
     transition: color 0.2s ease, transform 0.15s ease;
   }
   button:hover i.fa-pen { color: hsl(var(--accent)); transform: scale(1.15); }
@@ -184,6 +208,16 @@ html {
 .modal-container * {
   max-width: 100% !important;
   box-sizing: border-box;
+}
+
+.modal-scroll {
+  overflow-x: hidden;
+  scrollbar-width: none;
+}
+
+.modal-scroll::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 /* Cegah hover transform menambah lebar total (khusus tombol edit/delete) */

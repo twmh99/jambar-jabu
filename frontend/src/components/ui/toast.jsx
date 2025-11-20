@@ -30,7 +30,7 @@ export const ToastViewport = () => {
 
   return (
     <div
-      className="fixed right-5 top-5 z-[9999] flex flex-col gap-3 pointer-events-none"
+      className="fixed right-5 top-5 z-[12000] flex flex-col gap-3 pointer-events-none"
       aria-live="assertive"
     >
       {items.map((i) => {

@@ -6,6 +6,7 @@ const variants = {
   primary: 'ds-btn-primary',
   accent: 'ds-btn-accent',
   outline: 'ds-btn-outline',
+  neutral: 'btn-neutral',
   ghost: 'bg-transparent text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]',
 };
 

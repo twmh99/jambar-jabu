@@ -12,6 +12,7 @@ return new class extends Migration {
             $table->string('nama');
             $table->string('jabatan')->nullable();
             $table->string('telepon')->nullable();
+            $table->string('email')->unique()->nullable();
             $table->enum('status', ['Aktif','Nonaktif'])->default('Aktif');
             $table->integer('hourly_rate')->default(20000);
             $table->timestamps();

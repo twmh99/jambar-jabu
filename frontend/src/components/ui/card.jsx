@@ -1,7 +1,7 @@
 import React from 'react';
 
 export const Card = ({ className = '', children }) => (
-  <div className={["ds-card", className].join(' ')}>{children}</div>
+  <div className={["ds-card w-full overflow-hidden", className].join(' ')}>{children}</div>
 );
 
 export const CardHeader = ({ className = '', children }) => (
@@ -10,6 +10,10 @@ export const CardHeader = ({ className = '', children }) => (
 
 export const CardTitle = ({ className = '', children }) => (
   <h3 className={["text-lg font-semibold leading-snug", className].join(' ')}>{children}</h3>
+);
+
+export const CardDescription = ({ className = '', children }) => (
+  <p className={["text-sm text-[hsl(var(--muted-foreground))]", className].join(' ')}>{children}</p>
 );
 
 export const CardContent = ({ className = '', children }) => (

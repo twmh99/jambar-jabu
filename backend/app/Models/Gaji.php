@@ -11,11 +11,17 @@ class Gaji extends Model
 
     protected $table = 'gaji';
     protected $fillable = [
-        'pegawai_id', 'tanggal', 'jam', 'rate', 'tip', 'total'
+        'pegawai_id', 'periode_awal', 'periode_akhir',
+        'total_jam', 'gaji_pokok', 'bonus_tip', 'total_gaji', 'total_tip'
     ];
 
     public function pegawai()
     {
         return $this->belongsTo(Pegawai::class, 'pegawai_id');
+    }
+
+    public function tips()
+    {
+        return $this->hasMany(Tip::class, 'pegawai_id', 'pegawai_id');
     }
 }

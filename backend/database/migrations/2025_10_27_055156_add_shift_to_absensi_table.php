@@ -6,20 +6,22 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up()
-{
-    Schema::table('absensi', function (Blueprint $table) {
-        $table->string('shift', 50)->nullable()->after('tanggal'); // misalnya shift pagi/siang/malam
-    });
-}
+    {
+        // ✅ Cek dulu apakah kolom shift sudah ada sebelum menambah
+        if (!Schema::hasColumn('absensi', 'shift')) {
+            Schema::table('absensi', function (Blueprint $table) {
+                $table->string('shift', 50)->nullable()->after('tanggal');
+            });
+        }
+    }
 
-public function down()
-{
-    Schema::table('absensi', function (Blueprint $table) {
-        $table->dropColumn('shift');
-    });
-}
+    public function down()
+    {
+        if (Schema::hasColumn('absensi', 'shift')) {
+            Schema::table('absensi', function (Blueprint $table) {
+                $table->dropColumn('shift');
+            });
+        }
+    }
 };

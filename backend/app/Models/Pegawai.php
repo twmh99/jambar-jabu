@@ -17,6 +17,7 @@ class Pegawai extends Model
         'telepon',
         'status',
         'hourly_rate',
+        'email',
     ];
 
     /**
@@ -38,4 +39,10 @@ class Pegawai extends Model
     {
         return $this->hasMany(Gaji::class);
     }
+
+        public function tips()
+    {
+        return $this->hasMany(Tip::class);
+    }
+
 }

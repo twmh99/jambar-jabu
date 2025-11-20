@@ -7,7 +7,7 @@ use App\Http\Controllers\JadwalController;
 use App\Http\Controllers\AbsensiController;
 use App\Http\Controllers\GajiController;
 use App\Http\Controllers\ReportController;
-use App\Http\Controllers\DashboardController;
+// HAPUS: use App\Http\Controllers\DashboardController;
 
 /* ===== AUTH (public) ===== */
 Route::post('/login', [AuthController::class, 'login']);
@@ -21,12 +21,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/change-password', [AuthController::class, 'changePassword']);
 
+    /* 🔹 Dashboard Owner – pakai ReportController langsung */
+    Route::get('/dashboard/summary', [ReportController::class, 'ownerSummary']);
+
     /* Laporan Owner */
-    Route::get('/dashboard/summary', [DashboardController::class, 'summary']);
     Route::prefix('laporan')->group(function () {
         Route::get('/owner-summary', [ReportController::class, 'ownerSummary']);
         Route::get('/analisis', [ReportController::class, 'analisisKinerja']);
+        Route::post('/import-transaksi', [ReportController::class, 'importTransaksi']); // FIX
         Route::get('/payroll', [ReportController::class, 'payrollReport']);
+        Route::get('/absensi', [ReportController::class, 'attendanceRaw']);
     });
 
     /* Jadwal */
@@ -69,11 +73,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('checkin',      [AbsensiController::class, 'checkin']);
         Route::post('checkout',     [AbsensiController::class, 'checkout']);
 
-        // 🆕 Tambahan baru
-        Route::get('gaji/{id}', [PegawaiController::class, 'getGaji']);
+        // 🔹 PERBAIKI: pakai GajiController, bukan PegawaiController
+        Route::get('gaji/{id}', [GajiController::class, 'gajiPegawai']);
+
         Route::post('change-password', [PegawaiController::class, 'changePassword']);
 
         Route::get('profil/{id}',   [PegawaiController::class, 'profilPegawai']);
-        Route::post('profil/update/{id}', [PegawaiController::class, 'updateProfil']);
+        Route::post('profil/update/{id}', [PegawaiController::class, 'updateProfil'])->name('pegawai.updateProfil');
     });
 });

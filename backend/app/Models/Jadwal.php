@@ -18,4 +18,11 @@ class Jadwal extends Model
     {
         return $this->belongsTo(Pegawai::class, 'pegawai_id');
     }
+
+        public function supervisor()
+    {
+        return $this->belongsTo(User::class, 'supervisor_id');
+    }
+
+
 }

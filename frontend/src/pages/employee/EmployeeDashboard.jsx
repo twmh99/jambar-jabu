@@ -6,7 +6,57 @@ import WorkProgress from "../../components/employee/WorkProgress";
 import HistoryList from "../../components/employee/HistoryList";
 import api from "../../services/api";
 
-const fmtDate = (d = new Date()) => d.toISOString().slice(0, 10);
+const fmtDate = (d = new Date()) => {
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+};
+
+const parseCoord = (value, fallback, axis = "lat") => {
+  if (typeof value === "number" && !Number.isNaN(value)) return value;
+  if (!value) return fallback;
+  const original = String(value).trim();
+  const normalized = original
+    .trim()
+    .replace(/[^0-9,.\-]/g, "")
+    .replace(",", ".");
+  const parsed = parseFloat(normalized);
+  if (!Number.isFinite(parsed)) return fallback;
+
+  let sign = normalized.includes("-") ? -1 : 1;
+  if (sign === 1) {
+    const hasSouth = /[sS]/.test(original);
+    const hasWest = /[wW]/.test(original);
+    if (axis === "lat" && hasSouth) sign = -1;
+    if (axis === "lng" && hasWest) sign = -1;
+  }
+  return Math.abs(parsed) * sign;
+};
+
+const OFFICE_COORDS = {
+  lat: parseCoord(import.meta.env.VITE_OFFICE_LAT, -6.208864, "lat"),
+  lng: parseCoord(import.meta.env.VITE_OFFICE_LNG, 106.84513, "lng"),
+};
+const ALLOWED_RADIUS_METERS = parseInt(import.meta.env.VITE_OFFICE_RADIUS || "200", 10);
+
+const parseScheduleDateTime = (dateStr, timeStr = "00:00:00") => {
+  if (!dateStr || !timeStr) return null;
+  const [hour = "00", minute = "00", second = "00"] = timeStr.split(":");
+  const date = new Date(dateStr);
+  date.setHours(Number(hour), Number(minute), Number(second));
+  return date;
+};
+
+const distanceInMeters = (lat1, lon1, lat2, lon2) => {
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const R = 6371000;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
 const toArray = (res) => {
   if (!res) return [];
   const d = res.data;
@@ -17,12 +67,22 @@ const toArray = (res) => {
 
 export default function EmployeeDashboard() {
   const user = JSON.parse(localStorage.getItem("smpj_user") || "{}");
-  const pegawaiId = user?.pegawai_id || user?.id;
+  const pegawaiId = user?.pegawai_id || user?.pegawai?.id || user?.id;
 
   const [time, setTime] = React.useState(new Date());
   const [todaySchedule, setTodaySchedule] = React.useState(null);
-  const [weekHours, setWeekHours] = React.useState(0);
+  const [weekSummary, setWeekSummary] = React.useState({ hours: 0, days: 0, tips: 0, target: 40 });
   const [history, setHistory] = React.useState([]);
+  const [todayAttendance, setTodayAttendance] = React.useState(null);
+  const [geoStatus, setGeoStatus] = React.useState({
+    allowed: false,
+    checking: false,
+    distance: null,
+    message: "",
+  });
+  const [pullHint, setPullHint] = React.useState(0);
+  const pullHintRef = React.useRef(0);
+  const isRefreshing = React.useRef(false);
 
   React.useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
@@ -33,17 +93,21 @@ export default function EmployeeDashboard() {
     if (!pegawaiId) return;
 
     try {
+      const today = fmtDate();
       const [schRes, attRes] = await Promise.all([
-        api.get(`/pegawai/jadwal/${pegawaiId}`),
+        api.get(`/pegawai/jadwal/${pegawaiId}`, {
+          params: { jenis: "day", tanggal: today },
+        }),
         api.get(`/pegawai/absensi/${pegawaiId}`),
       ]);
 
       const schedules = toArray(schRes);
       const attendances = toArray(attRes);
 
-      const today = fmtDate();
-      const scToday = schedules.find((s) => s.tanggal === today);
+      const scToday = schedules.find((s) => s.tanggal === today) || schedules[0] || null;
       setTodaySchedule(scToday || null);
+      const attendanceToday = attendances.find((a) => a.tanggal === today) || null;
+      setTodayAttendance(attendanceToday);
 
       const weekStart = (() => {
         const d = new Date();
@@ -59,19 +123,31 @@ export default function EmployeeDashboard() {
       };
 
       const weekRows = attendances.filter((r) => r.tanggal >= weekStart);
+      const workedDays = new Set(weekRows.map((r) => r.tanggal)).size;
       const hours = weekRows.reduce((acc, r) => {
         const tin = parseHMS(r.check_in),
           tout = parseHMS(r.check_out);
         if (tin && tout && tout > tin) acc += (tout - tin) / 3600;
         return acc;
       }, 0);
-      setWeekHours(Math.round(hours * 100) / 100);
+      const tipSum = weekRows.reduce((acc, r) => acc + Number(r.tip || 0), 0);
+      setWeekSummary({
+        hours: Math.round(hours * 100) / 100,
+        days: workedDays,
+        tips: Math.round(tipSum),
+        target: 40,
+      });
 
       const last7 = attendances
         .slice()
         .sort((a, b) => (a.tanggal < b.tanggal ? 1 : -1))
         .slice(0, 7)
-        .map((r) => ({ tanggal: r.tanggal, status: r.status || "-" }));
+        .map((r) => ({
+          tanggal: r.tanggal,
+          status: r.status || "-",
+          jam_masuk: r.jam_masuk || r.check_in || null,
+          jam_keluar: r.jam_keluar || r.check_out || null,
+        }));
       setHistory(last7);
     } catch (err) {
       console.error(err);
@@ -83,7 +159,168 @@ export default function EmployeeDashboard() {
     load();
   }, [load]);
 
+  React.useEffect(() => {
+    const startY = { current: null };
+    const threshold = 80;
+
+    const handleTouchStart = (e) => {
+      if (window.scrollY === 0) {
+        startY.current = e.touches[0].clientY;
+      } else {
+        startY.current = null;
+      }
+      setPullHint(0);
+    };
+
+    const handleTouchMove = (e) => {
+      if (startY.current !== null) {
+        const dist = e.touches[0].clientY - startY.current;
+        if (dist > 0) {
+          const next = Math.min(dist, 120);
+          pullHintRef.current = next;
+          setPullHint(next);
+        }
+      }
+    };
+
+    const handleTouchEnd = async () => {
+      if (pullHintRef.current > threshold && !isRefreshing.current) {
+        isRefreshing.current = true;
+        navigator.vibrate?.(30);
+        await load();
+        toast.info("Data diperbarui");
+        isRefreshing.current = false;
+      }
+      pullHintRef.current = 0;
+      setPullHint(0);
+      startY.current = null;
+    };
+
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchmove", handleTouchMove, { passive: true });
+    window.addEventListener("touchend", handleTouchEnd);
+    return () => {
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [load]);
+
+  React.useEffect(() => {
+    if (!todaySchedule) {
+      setGeoStatus((prev) => ({ ...prev, allowed: false, message: "" }));
+      return;
+    }
+    if (!navigator?.geolocation) {
+      setGeoStatus({ allowed: false, checking: false, distance: null, message: "Perangkat tidak mendukung lokasi." });
+      return;
+    }
+    setGeoStatus((prev) => ({ ...prev, checking: true, message: "" }));
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const dist = distanceInMeters(pos.coords.latitude, pos.coords.longitude, OFFICE_COORDS.lat, OFFICE_COORDS.lng);
+        setGeoStatus({
+          allowed: dist <= ALLOWED_RADIUS_METERS,
+          checking: false,
+          distance: Math.round(dist),
+          message: dist <= ALLOWED_RADIUS_METERS ? "" : `Anda berada ${Math.round(dist)} m dari lokasi kantor.`,
+        });
+      },
+      (err) => {
+        setGeoStatus({
+          allowed: false,
+          checking: false,
+          distance: null,
+          message: err?.message || "Izin lokasi ditolak.",
+        });
+      },
+      { enableHighAccuracy: true }
+    );
+  }, [todaySchedule?.id]);
+
+  const weeklyHours = weekSummary.hours || 0;
+  const weeklyDays = weekSummary.days || 0;
+
+  const now = time;
+  const scheduleStart = todaySchedule
+    ? parseScheduleDateTime(todaySchedule.tanggal, todaySchedule.jam_mulai)
+    : null;
+  const scheduleEnd = todaySchedule
+    ? parseScheduleDateTime(todaySchedule.tanggal, todaySchedule.jam_selesai || todaySchedule.jam_mulai)
+    : null;
+  const checkInWindowStart = scheduleStart
+    ? new Date(scheduleStart.getTime() - 30 * 60 * 1000)
+    : null;
+  const beforeWindow = checkInWindowStart ? now < checkInWindowStart : true;
+
+  const alreadyCheckedIn = Boolean(todayAttendance?.check_in);
+  const alreadyCheckedOut = Boolean(todayAttendance?.check_out);
+
+  const canCheckIn =
+    Boolean(
+      todaySchedule &&
+        scheduleStart &&
+        scheduleEnd &&
+        !alreadyCheckedIn &&
+        geoStatus.allowed &&
+        !geoStatus.checking &&
+        now >= (checkInWindowStart || scheduleStart) &&
+        now <= scheduleEnd
+    );
+
+  const checkInMessage = (() => {
+    if (!todaySchedule) return "";
+    if (alreadyCheckedIn) return "Anda sudah check-in hari ini.";
+    if (geoStatus.checking) return "Menunggu konfirmasi lokasi...";
+    if (!geoStatus.allowed) {
+      return geoStatus.message || `Check-in hanya bisa dilakukan di area kantor (radius ${ALLOWED_RADIUS_METERS} m).`;
+    }
+    if (beforeWindow) {
+      if (!checkInWindowStart) return "Menunggu jadwal dimulai.";
+      const diffMinutes = Math.max(0, Math.ceil((checkInWindowStart.getTime() - now.getTime()) / 60000));
+      return `Check-in dibuka ${diffMinutes === 0 ? "sebentar lagi" : `dalam ${diffMinutes} menit`}.`;
+    }
+    return "";
+  })();
+
+  const showCheckOut = Boolean(
+    todaySchedule && scheduleEnd && alreadyCheckedIn && now >= scheduleEnd
+  );
+  const canCheckOut = Boolean(
+    showCheckOut && !alreadyCheckedOut && geoStatus.allowed && !geoStatus.checking
+  );
+  const checkOutMessage = (() => {
+    if (!todaySchedule) return "";
+    if (!showCheckOut) return "Check-out akan tersedia setelah jam selesai.";
+    if (alreadyCheckedOut) return "Anda sudah check-out hari ini.";
+    if (geoStatus.checking) return "Menunggu konfirmasi lokasi...";
+    if (!geoStatus.allowed) {
+      return geoStatus.message || `Check-out hanya bisa dilakukan di area kantor (radius ${ALLOWED_RADIUS_METERS} m).`;
+    }
+    return "";
+  })();
+
+  const nextShiftSoon =
+    scheduleStart &&
+    scheduleStart.getTime() - now.getTime() > 0 &&
+    scheduleStart.getTime() - now.getTime() <= 60 * 60 * 1000;
+
+  React.useEffect(() => {
+    const key = "smpj_nav_alert";
+    if (nextShiftSoon) {
+      localStorage.setItem(key, "/employee/schedule");
+    } else {
+      localStorage.removeItem(key);
+    }
+    window.dispatchEvent(new Event("smpj-nav-alert"));
+    return () => window.dispatchEvent(new Event("smpj-nav-alert"));
+  }, [nextShiftSoon]);
+
   const onCheckIn = async () => {
+    if (!canCheckIn) {
+      toast.error(checkInMessage || "Check-in tidak sesuai jadwal.");
+      return;
+    }
     try {
       await api.post(`/pegawai/checkin`, { pegawai_id: pegawaiId });
       toast.success("Check-in berhasil!");
@@ -94,6 +331,10 @@ export default function EmployeeDashboard() {
   };
 
   const onCheckOut = async () => {
+    if (!canCheckOut) {
+      toast.error(checkOutMessage || "Check-out belum dapat dilakukan.");
+      return;
+    }
     try {
       await api.post(`/pegawai/checkout`, { pegawai_id: pegawaiId });
       toast.success("Check-out berhasil!");
@@ -105,12 +346,17 @@ export default function EmployeeDashboard() {
 
   return (
     <div className="space-y-6">
+      {pullHint > 0 && (
+        <div className="text-center text-xs text-muted-foreground">
+          {pullHint > 80 ? "Lepas untuk refresh" : "Tarik ke bawah untuk refresh"}
+        </div>
+      )}
       {/* === Header Profil === */}
       <div className="flex justify-between items-start border-b pb-2">
         <div>
           <h2 className="text-lg font-semibold">Profil Pegawai</h2>
           <p className="text-sm text-gray-500">
-            ID: {user?.id || "-"} | {user?.name || "Pegawai"}
+            ID Pegawai: {pegawaiId || "-"} | {user?.name || "Pegawai"}
           </p>
         </div>
         <div className="text-sm text-gray-500 font-mono">
@@ -124,36 +370,90 @@ export default function EmployeeDashboard() {
         </div>
       </div>
 
+      {/* === Quick Stats === */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-2xl border bg-gradient-to-br from-sky-50 to-white p-4 shadow-sm">
+          <p className="text-xs uppercase tracking-wide text-sky-600 font-semibold">Shift Minggu Ini</p>
+          <p className="mt-2 text-3xl font-bold text-sky-900">{weeklyDays}</p>
+          <p className="text-xs text-sky-600">hari aktif dari {weekSummary.target / 8 || 5} hari kerja</p>
+        </div>
+        <div className="rounded-2xl border bg-gradient-to-br from-amber-50 to-white p-4 shadow-sm">
+          <p className="text-xs uppercase tracking-wide text-amber-600 font-semibold">Sisa Jam</p>
+          <p className="mt-2 text-3xl font-bold text-amber-900">
+            {Math.max(0, (weekSummary.target || 40) - weeklyHours).toFixed(1)}
+          </p>
+          <p className="text-xs text-amber-600">
+            dari target {(weekSummary.target || 40).toFixed(0)} jam
+          </p>
+        </div>
+        <div className="rounded-2xl border bg-gradient-to-br from-emerald-50 to-white p-4 shadow-sm">
+          <p className="text-xs uppercase tracking-wide text-emerald-600 font-semibold">Tip Minggu Ini</p>
+          <p className="mt-2 text-3xl font-bold text-emerald-900">
+            Rp{Number(weekSummary.tips || 0).toLocaleString("id-ID")}
+          </p>
+          <p className="text-xs text-emerald-600">gunakan sebagai bonus motivasi</p>
+        </div>
+      </div>
+
       {/* === Jadwal Hari Ini === */}
       <Card>
-        <CardHeader className="flex justify-between items-center">
+        <CardHeader className="border-b pb-4">
           <CardTitle>Jadwal Hari Ini</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <b>Shift:</b> {todaySchedule?.shift || "—"}
-            </div>
-            <div>
-              <b>Jam Masuk:</b>{" "}
-              {todaySchedule?.jam_mulai
-                ? `${todaySchedule.jam_mulai} - ${todaySchedule.jam_selesai}`
-                : "—"}
-            </div>
-            <div>
-              <b>Lokasi:</b>{" "}
-              <span className="font-semibold text-primary">Jambar Jabu</span>
-            </div>
-          </div>
+          {todaySchedule ? (
+            <div className="space-y-5 rounded-xl border bg-background/60 p-4 shadow-sm">
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-1">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Shift</p>
+                  <p className="text-lg font-semibold text-primary">{todaySchedule.shift || "—"}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Jam Masuk</p>
+                  <p className="text-lg font-semibold whitespace-nowrap sm:whitespace-normal">
+                    {(todaySchedule.jam_mulai || "--") + " – " + (todaySchedule.jam_selesai || "--")}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Lokasi</p>
+                  <p className="text-lg font-semibold">Jambar Jabu</p>
+                </div>
+              </div>
 
-          <div className="flex gap-2 pt-4">
-            <Button onClick={onCheckIn}>
-              <i className="fa-solid fa-right-to-bracket mr-2" /> Check-In
-            </Button>
-            <Button variant="outline" onClick={onCheckOut}>
-              <i className="fa-solid fa-right-from-bracket mr-2" /> Check-Out
-            </Button>
-          </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={onCheckIn}
+                    className={!canCheckIn ? "opacity-60 cursor-not-allowed" : ""}
+                  >
+                    <i className="fa-solid fa-right-to-bracket mr-2" /> Check-In
+                  </Button>
+                  {showCheckOut && (
+                    <Button
+                      variant="outline"
+                      onClick={onCheckOut}
+                      className={!canCheckOut ? "opacity-60 cursor-not-allowed" : ""}
+                    >
+                      <i className="fa-solid fa-right-from-bracket mr-2" /> Check-Out
+                    </Button>
+                  )}
+                </div>
+                <div className="text-sm text-muted-foreground space-y-1">
+                  {checkInMessage && <p>{checkInMessage}</p>}
+                  {checkOutMessage && <p>{checkOutMessage}</p>}
+                  {geoStatus.distance !== null && (
+                    <p className="text-xs">
+                      Jarak Anda ±{geoStatus.distance} m dari kantor (maks {ALLOWED_RADIUS_METERS} m).
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center text-muted-foreground py-4">
+              Tidak ada jadwal hari ini.
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -163,7 +463,7 @@ export default function EmployeeDashboard() {
           <CardTitle>Jam Kerja Minggu Ini</CardTitle>
         </CardHeader>
         <CardContent>
-          <WorkProgress hours={weekHours} target={40} />
+          <WorkProgress hours={weeklyHours} target={40} daysWorked={weeklyDays} daysTarget={6} />
         </CardContent>
       </Card>
 

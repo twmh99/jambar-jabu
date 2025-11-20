@@ -8,9 +8,20 @@ import EmptyState from "../../components/common/EmptyState";
 import { toast } from "../../components/ui/toast";
 import api from "../../services/api";
 
+const getDefaultRange = () => {
+  const today = new Date();
+  const first = new Date(today.getFullYear(), today.getMonth(), 1);
+  const last = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  return {
+    from: first.toISOString().slice(0, 10),
+    to: last.toISOString().slice(0, 10),
+  };
+};
+
 export default function AttendanceReport() {
-  const [from, setFrom] = React.useState(() => new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10));
-  const [to, setTo] = React.useState(() => new Date().toISOString().slice(0, 10));
+  const defaultRange = React.useMemo(() => getDefaultRange(), []);
+  const [from, setFrom] = React.useState(defaultRange.from);
+  const [to, setTo] = React.useState(defaultRange.to);
   const [emp, setEmp] = React.useState("");
   const [rows, setRows] = React.useState([]);
   const [emps, setEmps] = React.useState([]);
@@ -33,7 +44,7 @@ export default function AttendanceReport() {
     })();
   }, []);
 
-  const load = async () => {
+  const load = React.useCallback(async () => {
     setLoading(true);
     try {
       const res = await api.get("/laporan/absensi", { params: emp ? { pegawai_id: emp } : {} });
@@ -64,7 +75,11 @@ export default function AttendanceReport() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [emp, emps, from, to]);
+
+  React.useEffect(() => {
+    load();
+  }, [load]);
 
   return (
     <div className="space-y-6">
@@ -104,7 +119,12 @@ export default function AttendanceReport() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Hasil</CardTitle></CardHeader>
+        <CardHeader className="flex items-center justify-between">
+          <CardTitle>Hasil</CardTitle>
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">
+            Total data: <span className="font-semibold text-[hsl(var(--primary))]">{rows.length}</span>
+          </p>
+        </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
             <EmptyState title="Belum ada data absensi pada rentang tanggal ini" />

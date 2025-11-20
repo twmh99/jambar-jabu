@@ -6,7 +6,17 @@ import { Input, Label, Select } from '../../components/ui/input';
 import { toast } from '../../components/ui/toast';
 import Modal from '../../components/common/Modal';
 import ConfirmDeleteModal from '../../components/ui/ConfirmDeleteModal';
+import SearchInput from '../../components/common/SearchInput';
 import api from '../../services/api';
+
+const ROLE_RATE_MAP = {
+  Supervisor: 30000,
+  Koki: 27000,
+  Kasir: 25000,
+  Pelayan: 23000,
+  'Tukang Kebun': 20000,
+};
+const JABATAN_OPTIONS = ['Supervisor', 'Koki', 'Kasir', 'Pelayan', 'Tukang Kebun'];
 
 export default function EmployeesBase({ role }) {
   const [rows, setRows] = React.useState([]);
@@ -19,7 +29,51 @@ export default function EmployeesBase({ role }) {
   const [deleteTarget, setDeleteTarget] = React.useState(null);
   const [detailOpen, setDetailOpen] = React.useState(false);
   const [selectedPegawai, setSelectedPegawai] = React.useState(null);
+  const [filterRole, setFilterRole] = React.useState('');
+  const [filterStatus, setFilterStatus] = React.useState('');
+  const [selectedJabatan, setSelectedJabatan] = React.useState(JABATAN_OPTIONS[0]);
+  const hourlyRateRef = React.useRef(null);
   const pageSize = 8;
+  const [formError, setFormError] = React.useState('');
+  const isSupervisorContext = role === 'supervisor';
+  const editingPegawai = React.useMemo(() => {
+    if (!editId) return null;
+    return rows.find((r) => r.id === editId) || null;
+  }, [editId, rows]);
+  const editingJabatan = editingPegawai?.jabatan || null;
+  const selectableJabatanOptions = React.useMemo(() => {
+    let opts = [...JABATAN_OPTIONS];
+    if (isSupervisorContext && !(editId && editingJabatan === 'Supervisor')) {
+      opts = opts.filter((opt) => opt !== 'Supervisor');
+    }
+    if (editId && editingJabatan && !opts.includes(editingJabatan)) {
+      opts = [editingJabatan, ...opts];
+    }
+    return opts;
+  }, [isSupervisorContext, editId, editingJabatan]);
+  const disableJabatanSelect = !!(editId && editingJabatan === 'Supervisor');
+  const getPegawaiValue = (field) => (editId && editingPegawai ? editingPegawai[field] : undefined);
+  const applyRoleRate = (jabatan) => {
+    if (ROLE_RATE_MAP[jabatan] && hourlyRateRef.current) {
+      hourlyRateRef.current.value = ROLE_RATE_MAP[jabatan];
+    }
+  };
+  const deriveRoleValue = (jabatan) => (jabatan === 'Supervisor' ? 'supervisor' : 'employee');
+  const deriveRoleLabel = (jabatan) => (jabatan === 'Supervisor' ? 'Supervisor' : 'Pegawai');
+
+  React.useEffect(() => {
+    if (!open) return;
+    const jabatanDefault =
+      editingJabatan || selectableJabatanOptions[0] || 'Koki';
+    setSelectedJabatan(jabatanDefault);
+    if (hourlyRateRef.current) {
+      const presetRate =
+        editingPegawai?.hourly_rate ??
+        ROLE_RATE_MAP[jabatanDefault] ??
+        ROLE_RATE_MAP.Supervisor;
+      hourlyRateRef.current.value = presetRate;
+    }
+  }, [open, editingJabatan, selectableJabatanOptions, editingPegawai]);
 
   // ===== LOAD DATA =====
   const loadEmployees = async () => {
@@ -60,7 +114,9 @@ export default function EmployeesBase({ role }) {
     const fd = new FormData(e.currentTarget);
     const data = Object.fromEntries(fd.entries());
     if (!data.nama || !data.jabatan || !data.telepon) {
-      toast.error('Lengkapi nama, jabatan, dan telepon.');
+      const msg = 'Lengkapi nama, jabatan, dan telepon.';
+      setFormError(msg);
+      toast.error(msg);
       return;
     }
 
@@ -70,12 +126,19 @@ export default function EmployeesBase({ role }) {
 
       if (editId) {
         res = await api.put(`/pegawai/${editId}`, data);
-        const updated = res.data?.data?.pegawai || res.data?.pegawai || res.data || data;
-        setRows((prev) =>
-          prev.map((r) => (r.id === editId ? { ...r, ...updated } : r))
-        );
         toast.success('Data pegawai berhasil diperbarui.');
-      } else {
+        setFormError('');
+
+        // ✅ Setelah update, langsung ambil ulang data terbaru
+        await loadEmployees();
+
+        // ✅ Tutup modal & reset form
+        setOpen(false);
+        setEditId(null);
+        e.target.reset();
+        return;
+      }
+      else {
         res = await api.post('/pegawai', data);
         const newPegawai =
           res.data?.data?.pegawai || res.data?.pegawai || res.data || null;
@@ -85,6 +148,7 @@ export default function EmployeesBase({ role }) {
           await loadEmployees();
         }
         toast.success(`Pegawai "${data.nama}" berhasil ditambahkan.`);
+        setFormError('');
       }
 
       setOpen(false);
@@ -92,7 +156,9 @@ export default function EmployeesBase({ role }) {
       e.target.reset();
     } catch (err) {
       console.error('Save error:', err.response?.data || err.message);
-      toast.error(err.response?.data?.message || 'Gagal menyimpan pegawai!');
+      const msg = err.response?.data?.message || 'Gagal menyimpan pegawai!';
+      setFormError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -118,12 +184,23 @@ export default function EmployeesBase({ role }) {
   };
 
   // ===== FILTERING =====
+  const uniqueRoles = React.useMemo(() => {
+    const roles = new Set();
+    rows.forEach((r) => {
+      if (r.jabatan) roles.add(r.jabatan);
+    });
+    return Array.from(roles).sort();
+  }, [rows]);
+
   const filtered = Array.isArray(rows)
     ? rows.filter((r) => {
       const s = q.toLowerCase();
-      return [r.nama, r.jabatan, r.telepon, r.status].some((v) =>
+      const matchesSearch = [r.nama, r.jabatan, r.telepon, r.status].some((v) =>
         (v || '').toLowerCase().includes(s)
       );
+      const matchesRole = filterRole ? (r.jabatan || '').toLowerCase() === filterRole.toLowerCase() : true;
+      const matchesStatus = filterStatus ? (r.status || '').toLowerCase() === filterStatus.toLowerCase() : true;
+      return matchesSearch && matchesRole && matchesStatus;
     })
     : [];
 
@@ -135,36 +212,72 @@ export default function EmployeesBase({ role }) {
         open={showDelete}
         onCancel={() => setShowDelete(false)}
         onConfirm={handleDeleteConfirm}
+        entityLabel="data pegawai"
         targetName={rows[deleteTarget]?.nama}
       />
 
       <Card>
-        <CardHeader className="flex items-center justify-between gap-3">
-          <CardTitle>
-            {role === 'supervisor'
-              ? 'Data Pegawai (Supervisor)'
-              : 'Data Pegawai (Owner)'}
-          </CardTitle>
-          <div className="flex gap-2">
-            <Input
-              placeholder="Cari nama/jabatan/telepon..."
-              value={q}
-              onChange={(e) => {
-                setQ(e.target.value);
-                setPage(1);
-              }}
-              className="w-64"
-            />
-            <Button
-              variant="accent"
-              onClick={() => {
-                setEditId(null);
-                setOpen(true);
-              }}
-            >
-              <i className="fa-solid fa-user-plus mr-2" />
-              Tambah
-            </Button>
+        <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <CardTitle>
+              {role === 'supervisor'
+                ? 'Data Pegawai (Supervisor)'
+                : 'Data Pegawai (Owner)'}
+            </CardTitle>
+            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+              Total Pegawai: <span className="font-semibold text-[hsl(var(--primary))]">{rows.length}</span>
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 w-full lg:w-auto">
+            <div className="flex gap-2">
+              <SearchInput
+                placeholder="Cari nama/jabatan/telepon..."
+                value={q}
+                onChange={(e) => {
+                  setQ(e.target.value);
+                  setPage(1);
+                }}
+                className="min-w-[220px] sm:w-72"
+                aria-label="Cari pegawai"
+              />
+              <Button
+                variant="accent"
+                onClick={() => {
+                  setEditId(null);
+                  setOpen(true);
+                }}
+              >
+                <i className="fa-solid fa-user-plus mr-2" />
+                Tambah
+              </Button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Select
+                value={filterRole}
+                onChange={(e) => {
+                  setFilterRole(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">Semua Jabatan</option>
+                {uniqueRoles.map((jabatan) => (
+                  <option key={jabatan} value={jabatan}>
+                    {jabatan}
+                  </option>
+                ))}
+              </Select>
+              <Select
+                value={filterStatus}
+                onChange={(e) => {
+                  setFilterStatus(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="">Semua Status</option>
+                <option value="Aktif">Aktif</option>
+                <option value="Nonaktif">Nonaktif</option>
+              </Select>
+            </div>
           </div>
         </CardHeader>
 
@@ -176,7 +289,7 @@ export default function EmployeesBase({ role }) {
                 <TH>Jabatan</TH>
                 <TH>Telepon</TH>
                 <TH>Status</TH>
-                <TH className="text-right">Aksi</TH>
+                <TH className="text-center">Aksi</TH>
               </TR>
             </THead>
             <TBody>
@@ -200,8 +313,8 @@ export default function EmployeesBase({ role }) {
                       {r.status}
                     </span>
                   </TD>
-                  <TD className="text-right">
-                    <div className="flex justify-end gap-2">
+                  <TD className="text-center">
+                    <div className="flex justify-center gap-2">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -248,10 +361,19 @@ export default function EmployeesBase({ role }) {
       <Modal
         open={open}
         title={editId ? 'Ubah Pegawai' : 'Tambah Pegawai'}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          setOpen(false);
+          setFormError('');
+        }}
       >
         <form onSubmit={save} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
+            {formError && (
+              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                <i className="fa-solid fa-circle-exclamation mr-2" />
+                {formError}
+              </div>
+            )}
             <Label>Nama</Label>
             <Input
               name="nama"
@@ -261,11 +383,22 @@ export default function EmployeesBase({ role }) {
           </div>
           <div>
             <Label>Jabatan</Label>
-            <Input
+            <Select
               name="jabatan"
-              defaultValue={editId ? rows.find((r) => r.id === editId)?.jabatan : ''}
+              value={selectedJabatan}
+              onChange={(e) => {
+                setSelectedJabatan(e.target.value);
+                applyRoleRate(e.target.value);
+              }}
+              disabled={disableJabatanSelect}
               required
-            />
+            >
+              {selectableJabatanOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </Select>
           </div>
           <div>
             <Label>Telepon</Label>
@@ -286,18 +419,12 @@ export default function EmployeesBase({ role }) {
           </div>
           <div>
             <Label>Role</Label>
-            <Select
-              name="role"
-              defaultValue={
-                editId
-                  ? rows.find((r) => r.id === editId)?.role || 'employee'
-                  : 'employee'
-              }
-            >
-              <option value="employee">Pegawai</option>
-              <option value="supervisor">Supervisor</option>
-              <option value="owner">Owner</option>
-            </Select>
+            <Input
+              value={deriveRoleLabel(selectedJabatan)}
+              readOnly
+              className="bg-[hsl(var(--muted))]"
+            />
+            <input type="hidden" name="role" value={deriveRoleValue(selectedJabatan)} />
           </div>
           <div>
             <Label>Status</Label>
@@ -316,21 +443,21 @@ export default function EmployeesBase({ role }) {
               name="hourly_rate"
               min="0"
               step="1000"
-              defaultValue={
-                editId
-                  ? rows.find((r) => r.id === editId)?.hourly_rate || 20000
-                  : 20000
-              }
+              ref={hourlyRateRef}
+              defaultValue={ROLE_RATE_MAP.Supervisor}
             />
           </div>
           <div className="sm:col-span-2 flex justify-end gap-2 pt-2">
-            <button
+            <Button
               type="button"
-              className="btn-outline"
-              onClick={() => setOpen(false)}
+              variant="neutral"
+              onClick={() => {
+                setOpen(false);
+                setFormError('');
+              }}
             >
               Batal
-            </button>
+            </Button>
             <Button type="submit" disabled={loading}>
               {loading ? 'Menyimpan...' : 'Simpan'}
             </Button>
@@ -345,77 +472,88 @@ export default function EmployeesBase({ role }) {
         onClose={() => setDetailOpen(false)}
       >
         {selectedPegawai ? (
-          <div className="max-h-[70vh] overflow-y-auto space-y-5 text-[15px]">
-            {/* === Header Detail === */}
-            <div className="flex justify-between items-start mb-2">
-              <div className="text-center w-full">
-                <h2 className="text-lg font-semibold text-[hsl(var(--primary))]">
-                  {selectedPegawai.nama}
-                </h2>
+          <div className="max-h-[70vh] overflow-y-auto space-y-6 text-[15px]">
+            <div className="flex flex-col items-center gap-1 text-center">
+              <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#38bdf8] to-[#0ea5e9] flex items-center justify-center text-white text-3xl font-semibold shadow-lg">
+                {selectedPegawai.nama?.charAt(0)?.toUpperCase() || '?'}
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold">{selectedPegawai.nama}</h2>
                 <p className="text-[hsl(var(--muted-foreground))]">
                   {selectedPegawai.jabatan || '—'}
                 </p>
               </div>
-<Button
-  size="sm"
-  onClick={() => {
-    setDetailOpen(false);
-    setEditId(selectedPegawai.id);
-    setOpen(true);
-  }}
-  className="ml-3 flex items-center gap-2 text-white hover:text-yellow-200 transition-colors duration-200"
->
-  <i className="fa-solid fa-pen text-yellow-400 hover:text-yellow-300 transition-colors duration-200" />
-  <span>Edit</span>
-</Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setDetailOpen(false);
+                  setEditId(selectedPegawai.id);
+                  setOpen(true);
+                }}
+                className="mt-2 inline-flex items-center gap-2 px-4"
+              >
+                <i className="fa-solid fa-pen" />
+                Edit
+              </Button>
             </div>
 
-            {/* === Detail Grid === */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="p-3 rounded-xl border bg-[hsl(var(--card))] shadow-sm">
-                <strong className="block text-[13px] text-[hsl(var(--muted-foreground))]">
-                  Telepon
-                </strong>
-                <span>{selectedPegawai.telepon || '-'}</span>
-              </div>
-              <div className="p-3 rounded-xl border bg-[hsl(var(--card))] shadow-sm">
-                <strong className="block text-[13px] text-[hsl(var(--muted-foreground))]">
-                  Email
-                </strong>
-                <span>{selectedPegawai.email || '-'}</span>
-              </div>
-              <div className="p-3 rounded-xl border bg-[hsl(var(--card))] shadow-sm">
-                <strong className="block text-[13px] text-[hsl(var(--muted-foreground))]">
-                  Role
-                </strong>
-                <span className="capitalize">{selectedPegawai.role || '-'}</span>
-              </div>
-              <div className="p-3 rounded-xl border bg-[hsl(var(--card))] shadow-sm">
-                <strong className="block text-[13px] text-[hsl(var(--muted-foreground))]">
-                  Status
-                </strong>
-                <span
-                  className={`ds-badge ${selectedPegawai.status === 'Aktif'
-                    ? 'bg-[hsl(var(--success))] text-white'
-                    : 'bg-[hsl(var(--muted))]'
-                    }`}
+              {[
+                { label: 'Telepon', value: selectedPegawai.telepon || '-' },
+                { label: 'Email', value: selectedPegawai.email || '-' },
+                {
+                  label: 'Role',
+                  value: (() => {
+                    const rawRole = (selectedPegawai.role || '').toString().toLowerCase();
+                    if (rawRole === 'employee') return 'Pegawai';
+                    return rawRole ? rawRole.charAt(0).toUpperCase() + rawRole.slice(1) : '-';
+                  })(),
+                },
+                {
+                  label: 'Status',
+                  value: (
+                    <span
+                      className={`ds-badge ${
+                        selectedPegawai.status === 'Aktif'
+                          ? 'bg-[hsl(var(--success))] text-white'
+                          : 'bg-[hsl(var(--muted))]'
+                      }`}
+                    >
+                      {selectedPegawai.status || '-'}
+                    </span>
+                  ),
+                },
+              ].map((field, idx) => (
+                <div
+                  key={idx}
+                  className="p-4 rounded-xl border bg-[hsl(var(--card))] shadow-sm flex flex-col gap-1"
                 >
-                  {selectedPegawai.status}
-                </span>
-              </div>
-              <div className="sm:col-span-2 p-3 rounded-xl border bg-[hsl(var(--card))] shadow-sm">
-                <strong className="block text-[13px] text-[hsl(var(--muted-foreground))]">
+                  <span className="text-xs font-semibold tracking-wide text-gray-500">
+                    {field.label}
+                  </span>
+                  <span className="text-[hsl(var(--foreground))]">{field.value}</span>
+                </div>
+              ))}
+              <div className="sm:col-span-2 p-4 rounded-xl border bg-[hsl(var(--card))] shadow-sm flex flex-col gap-1">
+                <span className="text-xs font-semibold tracking-wide text-gray-500">
                   Tarif/Jam
-                </strong>
+                </span>
                 <span>
-                  Rp {selectedPegawai.hourly_rate?.toLocaleString('id-ID') || 0}
+                  Rp{' '}
+                  {selectedPegawai.hourly_rate
+                    ? selectedPegawai.hourly_rate.toLocaleString('id-ID')
+                    : '0'}
                 </span>
               </div>
             </div>
 
-            {/* Tombol Tutup */}
             <div className="flex justify-end pt-2">
-              <button onClick={() => setDetailOpen(false)} className="btn-outline">
+              <button
+                type="button"
+                onClick={() => setDetailOpen(false)}
+                className="btn-neutral"
+              >
                 Tutup
               </button>
             </div>

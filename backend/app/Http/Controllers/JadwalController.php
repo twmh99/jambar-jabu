@@ -18,6 +18,7 @@ class JadwalController extends Controller
             $q = Jadwal::leftJoin('pegawai', 'jadwal.pegawai_id', '=', 'pegawai.id')
                 ->select(
                     'jadwal.id',
+                    'jadwal.pegawai_id',
                     'pegawai.nama as nama',
                     'jadwal.tanggal',
                     'jadwal.shift',
@@ -121,6 +122,7 @@ class JadwalController extends Controller
                 ->whereBetween(DB::raw('DATE(jadwal.tanggal)'), [$start, $end])
                 ->select(
                     'jadwal.id',
+                    'jadwal.pegawai_id',
                     'pegawai.nama as nama',
                     'jadwal.shift',
                     'jadwal.tanggal',
@@ -233,10 +235,14 @@ class JadwalController extends Controller
     }
 
     /** ===================== 👤 JADWAL PEGAWAI SPESIFIK ===================== */
-    public function jadwalPegawai($id)
+    public function jadwalPegawai(Request $request, $id)
     {
         try {
-            $rows = Jadwal::leftJoin('pegawai', 'jadwal.pegawai_id', '=', 'pegawai.id')
+            $jenis = $request->query('jenis', 'all');
+            $tanggal = $request->query('tanggal');
+            $shift = $request->query('shift');
+
+            $query = Jadwal::leftJoin('pegawai', 'jadwal.pegawai_id', '=', 'pegawai.id')
                 ->where('jadwal.pegawai_id', $id)
                 ->select(
                     'jadwal.id',
@@ -245,8 +251,27 @@ class JadwalController extends Controller
                     'jadwal.shift',
                     'jadwal.jam_mulai',
                     'jadwal.jam_selesai'
-                )
+                );
+
+            if ($shift) {
+                $query->where('jadwal.shift', $shift);
+            }
+
+            if ($tanggal) {
+                if ($jenis === 'day') {
+                    $query->whereDate('jadwal.tanggal', Carbon::parse($tanggal)->toDateString());
+                } elseif ($jenis === 'month') {
+                    $dateObj = Carbon::parse($tanggal);
+                    $query->whereBetween(DB::raw('DATE(jadwal.tanggal)'), [
+                        $dateObj->copy()->startOfMonth()->toDateString(),
+                        $dateObj->copy()->endOfMonth()->toDateString(),
+                    ]);
+                }
+            }
+
+            $rows = $query
                 ->orderBy('jadwal.tanggal', 'asc')
+                ->orderBy('jadwal.jam_mulai', 'asc')
                 ->get();
 
             return response()->json([

@@ -1,4 +1,9 @@
-export default function DownloadButton({ filename = 'export.csv', rows = [], headers = [] }) {
+export default function DownloadButton({
+  filename = 'export.csv',
+  rows = [],
+  headers = [],
+  className = '',
+}) {
   const toCSV = () => {
     const head = headers.length ? headers : Object.keys(rows[0] || {})
     const csv = [head.join(','), ...rows.map(r => head.map(h => JSON.stringify(r[h] ?? '')).join(','))].join('\n')
@@ -11,7 +16,7 @@ export default function DownloadButton({ filename = 'export.csv', rows = [], hea
     URL.revokeObjectURL(url)
   }
   return (
-    <button onClick={toCSV} className="ds-btn ds-btn-outline">
+    <button onClick={toCSV} className={['ds-btn ds-btn-outline', className].join(' ').trim()}>
       <i className="fa-solid fa-download mr-2" /> Download CSV
     </button>
   )

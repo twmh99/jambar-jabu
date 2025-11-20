@@ -24,7 +24,7 @@ class Handler extends ExceptionHandler
 
     public function render($request, Throwable $e)
     {
-        // Kalau request ke /api/* kita balikin JSON yang jelas
+        // request ke /api/* balikin JSON yang jelas
         if ($request->is('api/*')) {
             $status = method_exists($e, 'getStatusCode') ? $e->getStatusCode() : 500;
 

@@ -13,7 +13,7 @@ use Carbon\Carbon;
 
 class AuthController extends Controller
 {
-    /** 🔐 LOGIN (email/nama, semua role + fallback pegawai baru + notifikasi supervisor) */
+    /** LOGIN (email/nama, semua role + fallback pegawai baru + notifikasi supervisor) */
     public function login(Request $request)
     {
         $request->validate([

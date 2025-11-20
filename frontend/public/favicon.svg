@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#000" flood-opacity="0.3" />
+    </filter>
+  </defs>
+
+  <!-- Outer red disc -->
+  <circle cx="64" cy="64" r="60" fill="#e60012" filter="url(#shadow)" stroke="#ffd7d7" stroke-width="2" />
+
+  <!-- Dashed ring -->
+  <circle
+    cx="64"
+    cy="64"
+    r="52"
+    fill="none"
+    stroke="#ffffff"
+    stroke-width="6"
+    stroke-dasharray="9 6"
+    stroke-linecap="round"
+  />
+
+  <!-- Bowl icon -->
+  <g transform="translate(20 44)">
+    <path
+      d="M0 0h44c0 10.5-9.8 19-22 19S0 10.5 0 0Z"
+      fill="none"
+      stroke="#ffffff"
+      stroke-width="4"
+      stroke-linejoin="round"
+    />
+    <path d="M8 19h28" stroke="#ffffff" stroke-width="4" stroke-linecap="round" />
+    <path d="M12 -8c4 0 4 6 8 6s4-6 8-6" stroke="#ffffff" stroke-width="4" stroke-linecap="round" fill="none" />
+    <g stroke="#ffffff" stroke-width="4" stroke-linecap="round">
+      <line x1="33" y1="-10" x2="55" y2="-6" />
+      <line x1="33" y1="-4" x2="55" y2="0" />
+      <line x1="55" y1="-10" x2="55" y2="5" />
+    </g>
+  </g>
+
+  <!-- Text JJ -->
+  <text
+    x="80"
+    y="70"
+    font-family="Poppins, 'Segoe UI', sans-serif"
+    font-size="34"
+    font-weight="600"
+    fill="#ffffff"
+    text-anchor="middle"
+  >
+    JJ
+  </text>
+
+  <!-- Subtitle -->
+  <text
+    x="64"
+    y="96"
+    font-family="Poppins, 'Segoe UI', sans-serif"
+    font-size="12"
+    letter-spacing="1"
+    fill="#ffffff"
+    text-anchor="middle"
+  >
+    MIE PANGSIT SIANTAR
+  </text>
+</svg>
