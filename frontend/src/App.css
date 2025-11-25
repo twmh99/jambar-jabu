@@ -37,7 +37,7 @@
     }
 }
 
-/* 🌈 Background Gradient Animation */
+/* Background Gradient Animation */
 @keyframes gradient-move {
   0% {
     background-position: 0% 50%;
