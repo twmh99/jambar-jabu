@@ -8,14 +8,23 @@ export const Sparkline = ({
 }) => {
   if (!data.length) return null;
 
-  // Mendukung format angka dan { label, value }
-  const pointsRaw = data.map((d) => ({
-    label: typeof d === "number" ? "" : d.label ?? "",
-    value: typeof d === "number" ? d : d.value ?? 0,
-  }));
+  // Mendukung format angka dan { value, axisLabel, tooltip }
+  const pointsRaw = data.map((d) => {
+    if (typeof d === "number") {
+      return { axisLabel: "", tooltip: "", value: d };
+    }
+    return {
+      axisLabel: d.axisLabel ?? d.label ?? "",
+      tooltip: d.tooltip ?? d.label ?? d.axisLabel ?? "",
+      value: Number(d.value) || 0,
+    };
+  });
 
   const values = pointsRaw.map((d) => Number(d.value) || 0);
-  const labels = pointsRaw.map((d) => d.label);
+  const labels = pointsRaw.map((d) => d.axisLabel || "");
+  const tooltipLabels = pointsRaw.map(
+    (d) => d.tooltip || d.axisLabel || ""
+  );
 
   const w = width;
   const h = height;
@@ -33,7 +42,13 @@ export const Sparkline = ({
       values.map((v, i) => {
         const x = values.length === 1 ? w / 2 : pad + (i * (w - pad * 2)) / span;
         const y = h - pad - ((v - min) / (max - min || 1)) * chartHeight;
-        return { x, y, value: v, label: labels[i] };
+        return {
+          x,
+          y,
+          value: v,
+          label: labels[i],
+          tooltip: tooltipLabels[i],
+        };
       }),
     [values, labels, span, h, pad, chartHeight, max, min]
   );
@@ -206,24 +221,34 @@ export const Sparkline = ({
           </text>
 
           {/* label X (minggu) */}
-          <text
-            x={p.x}
-            y={h - pad + 18}
-            textAnchor="middle"
-            fontSize="11"
-            fill="hsl(var(--muted-foreground))"
-            fontWeight="500"
-          >
-            {p.label}
-          </text>
+          {p.label ? (
+            <text
+              x={p.x}
+              y={h - pad + 18}
+              textAnchor="middle"
+              fontSize="11"
+              fill="hsl(var(--muted-foreground))"
+              fontWeight="500"
+            >
+              {p.label.split(/\n+/).map((line, idx) => (
+                <tspan
+                  key={`${line}-${idx}`}
+                  x={p.x}
+                  dy={idx === 0 ? 0 : 12}
+                >
+                  {line}
+                </tspan>
+              ))}
+            </text>
+          ) : null}
         </g>
       ))}
 
       {/* ===== Tooltip (floating box) ===== */}
       {hover && (
         (() => {
-          const tooltipText = `${hover.label || ""}`.trim()
-            ? `${hover.label}: ${hover.value}`
+          const tooltipText = `${hover.tooltip || ""}`.trim()
+            ? `${hover.tooltip}: ${hover.value}`
             : `${hover.value}`;
           const tooltipWidth = Math.min(
             Math.max(tooltipText.length * 7 + 20, 70),

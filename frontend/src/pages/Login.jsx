@@ -13,7 +13,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  /** 🔐 SUBMIT LOGIN */
+  /** SUBMIT LOGIN */
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -133,6 +133,7 @@ export default function Login() {
                 placeholder="Masukkan Email atau Username"
                 autoComplete="username"
                 required
+                requiredMessage="Email atau Username wajib diisi."
                 value={login}
                 onChange={(e) => setLogin(e.target.value)}
               />
@@ -146,6 +147,7 @@ export default function Login() {
                 placeholder="********"
                 autoComplete="current-password"
                 required
+                requiredMessage="Password wajib diisi."
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />

@@ -8,6 +8,11 @@ import Modal from '../../components/common/Modal';
 import ConfirmDeleteModal from '../../components/ui/ConfirmDeleteModal';
 import SearchInput from '../../components/common/SearchInput';
 import api from '../../services/api';
+import {
+  validateEmployeeData,
+  normalizeBackendErrors,
+  firstErrorMessage,
+} from '../../utils/validation';
 
 const ROLE_RATE_MAP = {
   Supervisor: 30000,
@@ -18,12 +23,19 @@ const ROLE_RATE_MAP = {
 };
 const JABATAN_OPTIONS = ['Supervisor', 'Koki', 'Kasir', 'Pelayan', 'Tukang Kebun'];
 
+const FieldError = ({ message }) =>
+  message ? (
+    <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+      <i className="fa-solid fa-circle-exclamation" />
+      {message}
+    </p>
+  ) : null;
+
 export default function EmployeesBase({ role }) {
   const [rows, setRows] = React.useState([]);
   const [open, setOpen] = React.useState(false);
   const [editId, setEditId] = React.useState(null);
   const [q, setQ] = React.useState('');
-  const [page, setPage] = React.useState(1);
   const [loading, setLoading] = React.useState(false);
   const [showDelete, setShowDelete] = React.useState(false);
   const [deleteTarget, setDeleteTarget] = React.useState(null);
@@ -31,10 +43,12 @@ export default function EmployeesBase({ role }) {
   const [selectedPegawai, setSelectedPegawai] = React.useState(null);
   const [filterRole, setFilterRole] = React.useState('');
   const [filterStatus, setFilterStatus] = React.useState('');
+  const [sortField, setSortField] = React.useState('nama');
+  const [sortDir, setSortDir] = React.useState('asc');
   const [selectedJabatan, setSelectedJabatan] = React.useState(JABATAN_OPTIONS[0]);
   const hourlyRateRef = React.useRef(null);
-  const pageSize = 8;
   const [formError, setFormError] = React.useState('');
+  const [fieldErrors, setFieldErrors] = React.useState({});
   const isSupervisorContext = role === 'supervisor';
   const editingPegawai = React.useMemo(() => {
     if (!editId) return null;
@@ -51,6 +65,7 @@ export default function EmployeesBase({ role }) {
     }
     return opts;
   }, [isSupervisorContext, editId, editingJabatan]);
+  
   // Owner boleh ubah Supervisor; Supervisor tidak boleh ubah Supervisor
   const disableJabatanSelect =
     isSupervisorContext && !!(editId && editingJabatan === 'Supervisor');
@@ -76,6 +91,13 @@ export default function EmployeesBase({ role }) {
       hourlyRateRef.current.value = presetRate;
     }
   }, [open, editingJabatan, selectableJabatanOptions, editingPegawai]);
+
+  React.useEffect(() => {
+    if (!open) {
+      setFormError('');
+      setFieldErrors({});
+    }
+  }, [open]);
 
   // ===== LOAD DATA =====
   const loadEmployees = async () => {
@@ -111,15 +133,56 @@ export default function EmployeesBase({ role }) {
   };
 
   // ===== SAVE / UPDATE =====
+  const normalizeStr = (value = '') => value?.toString().trim();
+  const normalizeEmail = (value = '') => normalizeStr(value).toLowerCase();
+
   const save = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const data = Object.fromEntries(fd.entries());
-    if (!data.nama || !data.jabatan || !data.telepon) {
-      const msg = 'Lengkapi nama, jabatan, dan telepon.';
+    const validation = validateEmployeeData(data);
+    if (Object.keys(validation).length > 0) {
+      setFieldErrors(validation);
+      const msg = firstErrorMessage(validation) || 'Semua field wajib diisi.';
       setFormError(msg);
       toast.error(msg);
       return;
+    }
+    setFieldErrors({});
+    setFormError('');
+
+    if (editId && editingPegawai) {
+      const incoming = {
+        nama: normalizeStr(data.nama),
+        jabatan: data.jabatan,
+        telepon: normalizeStr(data.telepon),
+        email: normalizeEmail(data.email),
+        status: data.status || 'Aktif',
+        hourly_rate: Number(data.hourly_rate ?? editingPegawai.hourly_rate ?? 0),
+        role: (data.role && data.role.length ? data.role : deriveRoleValue(data.jabatan)),
+      };
+
+      const existing = {
+        nama: normalizeStr(editingPegawai.nama),
+        jabatan: editingPegawai.jabatan,
+        telepon: normalizeStr(editingPegawai.telepon),
+        email: normalizeEmail(editingPegawai.email),
+        status: editingPegawai.status || 'Aktif',
+        hourly_rate: Number(editingPegawai.hourly_rate ?? 0),
+        role: deriveRoleValue(editingPegawai.jabatan),
+      };
+
+      const isSame = Object.keys(incoming).every(
+        (key) => incoming[key] === existing[key]
+      );
+
+      if (isSame) {
+        toast.info('Tidak ada perubahan yang disimpan.');
+        setOpen(false);
+        setEditId(null);
+        e.target.reset();
+        return;
+      }
     }
 
     try {
@@ -130,6 +193,7 @@ export default function EmployeesBase({ role }) {
         res = await api.put(`/pegawai/${editId}`, data);
         toast.success('Data pegawai berhasil diperbarui.');
         setFormError('');
+        setFieldErrors({});
 
         // ✅ Setelah update, langsung ambil ulang data terbaru
         await loadEmployees();
@@ -151,6 +215,7 @@ export default function EmployeesBase({ role }) {
         }
         toast.success(`Pegawai "${data.nama}" berhasil ditambahkan.`);
         setFormError('');
+        setFieldErrors({});
       }
 
       setOpen(false);
@@ -158,17 +223,25 @@ export default function EmployeesBase({ role }) {
       e.target.reset();
     } catch (err) {
       console.error('Save error:', err.response?.data || err.message);
-      const msg = err.response?.data?.message || 'Gagal menyimpan pegawai!';
-      setFormError(msg);
-      toast.error(msg);
+      const backend = normalizeBackendErrors(err?.response?.data?.errors);
+      if (Object.keys(backend).length) {
+        setFieldErrors(backend);
+        const msg = firstErrorMessage(backend);
+        setFormError(msg);
+        toast.error(msg || 'Gagal menyimpan pegawai!');
+      } else {
+        const msg = err.response?.data?.message || 'Gagal menyimpan pegawai!';
+        setFormError(msg);
+        toast.error(msg);
+      }
     } finally {
       setLoading(false);
     }
   };
 
   // ===== DELETE =====
-  const confirmRemove = (idx) => {
-    setDeleteTarget(idx);
+  const confirmRemove = (rowIdx) => {
+    setDeleteTarget(rowIdx);
     setShowDelete(true);
   };
 
@@ -193,9 +266,20 @@ export default function EmployeesBase({ role }) {
     });
     return Array.from(roles).sort();
   }, [rows]);
+  const toggleSort = React.useCallback((field) => {
+    setSortField((prevField) => {
+      if (prevField === field) {
+        setSortDir((prevDir) => (prevDir === 'asc' ? 'desc' : 'asc'));
+        return prevField;
+      }
+      setSortDir('asc');
+      return field;
+    });
+  }, []);
 
-  const filtered = Array.isArray(rows)
-    ? rows.filter((r) => {
+  const filtered = React.useMemo(() => {
+    const base = Array.isArray(rows) ? rows : [];
+    const filteredRows = base.filter((r) => {
       const s = q.toLowerCase();
       const matchesSearch = [r.nama, r.jabatan, r.telepon, r.status].some((v) =>
         (v || '').toLowerCase().includes(s)
@@ -203,10 +287,28 @@ export default function EmployeesBase({ role }) {
       const matchesRole = filterRole ? (r.jabatan || '').toLowerCase() === filterRole.toLowerCase() : true;
       const matchesStatus = filterStatus ? (r.status || '').toLowerCase() === filterStatus.toLowerCase() : true;
       return matchesSearch && matchesRole && matchesStatus;
-    })
-    : [];
+    });
 
-  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+    const sortedRows = [...filteredRows].sort((a, b) => {
+      const dir = sortDir === 'desc' ? -1 : 1;
+      const compareText = (x = '', y = '') => dir * x.localeCompare(y, 'id');
+      switch (sortField) {
+        case 'jabatan':
+          return compareText(a.jabatan || '', b.jabatan || '');
+        case 'status':
+          return compareText(a.status || '', b.status || '');
+        case 'telepon':
+          return compareText(a.telepon || '', b.telepon || '');
+        case 'id':
+          return dir * (Number(a.id) - Number(b.id));
+        case 'nama':
+        default:
+          return compareText(a.nama || '', b.nama || '');
+      }
+    });
+
+    return sortedRows;
+  }, [rows, q, filterRole, filterStatus, sortField, sortDir]);
 
   return (
     <div className="space-y-6">
@@ -237,7 +339,6 @@ export default function EmployeesBase({ role }) {
                 value={q}
                 onChange={(e) => {
                   setQ(e.target.value);
-                  setPage(1);
                 }}
                 className="min-w-[220px] sm:w-72"
                 aria-label="Cari pegawai"
@@ -258,7 +359,6 @@ export default function EmployeesBase({ role }) {
                 value={filterRole}
                 onChange={(e) => {
                   setFilterRole(e.target.value);
-                  setPage(1);
                 }}
               >
                 <option value="">Semua Jabatan</option>
@@ -272,7 +372,6 @@ export default function EmployeesBase({ role }) {
                 value={filterStatus}
                 onChange={(e) => {
                   setFilterStatus(e.target.value);
-                  setPage(1);
                 }}
               >
                 <option value="">Semua Status</option>
@@ -287,15 +386,23 @@ export default function EmployeesBase({ role }) {
           <Table>
             <THead>
               <TR>
-                <TH>Nama</TH>
-                <TH>Jabatan</TH>
-                <TH>Telepon</TH>
-                <TH>Status</TH>
+                <TH className="cursor-pointer select-none" onClick={() => toggleSort("nama")}>
+                  Nama
+                </TH>
+                <TH className="cursor-pointer select-none" onClick={() => toggleSort("jabatan")}>
+                  Jabatan
+                </TH>
+                <TH className="cursor-pointer select-none" onClick={() => toggleSort("telepon")}>
+                  Telepon
+                </TH>
+                <TH className="cursor-pointer select-none" onClick={() => toggleSort("status")}>
+                  Status
+                </TH>
                 <TH className="text-center">Aksi</TH>
               </TR>
             </THead>
             <TBody>
-              {paged.map((r, idx) => (
+              {filtered.map((r, idx) => (
                 <TR
                   key={r.id}
                   onClick={() => showDetail(r)}
@@ -332,7 +439,7 @@ export default function EmployeesBase({ role }) {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          confirmRemove((page - 1) * pageSize + idx);
+                          confirmRemove(filtered.indexOf(r));
                         }}
                         className="btn-delete"
                         title="Hapus Pegawai"
@@ -344,7 +451,7 @@ export default function EmployeesBase({ role }) {
                   </TD>
                 </TR>
               ))}
-              {paged.length === 0 && (
+              {filtered.length === 0 && (
                 <TR>
                   <TD
                     colSpan={5}
@@ -366,22 +473,19 @@ export default function EmployeesBase({ role }) {
         onClose={() => {
           setOpen(false);
           setFormError('');
+          setFieldErrors({});
         }}
       >
         <form onSubmit={save} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
-            {formError && (
-              <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                <i className="fa-solid fa-circle-exclamation mr-2" />
-                {formError}
-              </div>
-            )}
             <Label>Nama</Label>
             <Input
               name="nama"
               defaultValue={editId ? rows.find((r) => r.id === editId)?.nama : ''}
               required
+              requiredMessage="Nama wajib diisi."
             />
+            <FieldError message={fieldErrors.nama} />
           </div>
           <div>
             <Label>Jabatan</Label>
@@ -401,6 +505,7 @@ export default function EmployeesBase({ role }) {
                 </option>
               ))}
             </Select>
+            <FieldError message={fieldErrors.jabatan} />
           </div>
           <div>
             <Label>Telepon</Label>
@@ -408,7 +513,9 @@ export default function EmployeesBase({ role }) {
               name="telepon"
               defaultValue={editId ? rows.find((r) => r.id === editId)?.telepon : ''}
               required
+              requiredMessage="Telepon wajib diisi."
             />
+            <FieldError message={fieldErrors.telepon} />
           </div>
           <div>
             <Label>Email (Login)</Label>
@@ -417,7 +524,10 @@ export default function EmployeesBase({ role }) {
               name="email"
               placeholder="contoh: pegawai@gmail.com"
               defaultValue={editId ? rows.find((r) => r.id === editId)?.email || '' : ''}
+              required
+              requiredMessage="Email wajib diisi."
             />
+            <FieldError message={fieldErrors.email} />
           </div>
           <div>
             <Label>Role</Label>
@@ -447,6 +557,8 @@ export default function EmployeesBase({ role }) {
               step="1000"
               ref={hourlyRateRef}
               defaultValue={ROLE_RATE_MAP.Supervisor}
+              required
+              requiredMessage="Tarif/Jam wajib diisi."
             />
           </div>
           <div className="sm:col-span-2 flex justify-end gap-2 pt-2">
@@ -456,6 +568,7 @@ export default function EmployeesBase({ role }) {
               onClick={() => {
                 setOpen(false);
                 setFormError('');
+                setFieldErrors({});
               }}
             >
               Batal

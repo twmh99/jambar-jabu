@@ -76,22 +76,22 @@ class AuthController extends Controller
                     }
                 }
 
-                /** 💾 Log juga di file untuk keamanan */
+                /** Log juga di file untuk keamanan */
                 Log::info("Akun otomatis dibuat untuk pegawai: {$pegawai->nama} ({$pegawai->email}) pada " . Carbon::now());
             }
         }
 
-        /** ❌ Jika tetap tidak ditemukan */
+        /** Jika tetap tidak ditemukan */
         if (!$user) {
             throw ValidationException::withMessages([
-                'login' => ['Akun tidak ditemukan di sistem.'],
+                'login' => ['Login gagal. Periksa email/nama & password.'],
             ]);
         }
 
         /** 🔒 Verifikasi password */
         if (!Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
-                'login' => ['Password salah.'],
+                'login' => ['Login gagal. Periksa email/nama & password.'],
             ]);
         }
 
@@ -122,7 +122,7 @@ class AuthController extends Controller
         ], 200);
     }
 
-    /** 🚪 LOGOUT */
+    /** LOGOUT */
     public function logout(Request $request)
     {
         $token = $request->user()?->currentAccessToken();
@@ -132,13 +132,13 @@ class AuthController extends Controller
         return response()->json(['message' => 'Logout berhasil.'], 200);
     }
 
-    /** 👤 PROFIL USER LOGIN */
+    /** PROFIL USER LOGIN */
     public function me(Request $request)
     {
         return response()->json($request->user()->load('pegawai'));
     }
 
-    /** 🔑 GANTI PASSWORD */
+    /** GANTI PASSWORD */
     public function changePassword(Request $request)
     {
         $request->validate([

@@ -7,13 +7,18 @@ import {
 } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Table, TBody, THead, TH, TR, TD } from "../../components/ui/table";
-import { Sparkline } from "../../components/charts/Sparkline";
+import { LineChart } from "../../components/charts/LineChart";
 import { Pie } from "../../components/charts/Pie";
 import { useNavigate } from "react-router-dom";
 import Modal from "../../components/common/Modal";
 import { Input, Label, Select } from "../../components/ui/input";
 import api from "../../services/api";
 import { toast } from "../../components/ui/toast";
+import {
+  validateEmployeeData,
+  normalizeBackendErrors,
+  firstErrorMessage,
+} from "../../utils/validation";
 
 const ROLE_RATE_MAP = {
   Supervisor: 30000,
@@ -41,6 +46,14 @@ const deriveRoleFromJabatan = (jabatan) =>
 const deriveRoleLabel = (jabatan) =>
   jabatan === "Supervisor" ? "Supervisor" : "Pegawai";
 
+const FieldError = ({ message }) =>
+  message ? (
+    <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+      <i className="fa-solid fa-circle-exclamation" />
+      {message}
+    </p>
+  ) : null;
+
 export default function OwnerDashboard() {
   const [summary, setSummary] = React.useState({
     total_pegawai: 0,
@@ -59,8 +72,37 @@ export default function OwnerDashboard() {
   const [selectedJabatan, setSelectedJabatan] = React.useState(
     JABATAN_OPTIONS[0]
   );
+  const [employeeFormErrors, setEmployeeFormErrors] = React.useState({});
   const hourlyRateRef = React.useRef(null);
   const nav = useNavigate();
+  const normalizeStr = (value = "") => value?.toString().trim();
+  const normalizeEmail = (value = "") => normalizeStr(value).toLowerCase();
+  const editingPegawai = React.useMemo(
+    () =>
+      editId
+        ? employees.find((emp) => emp.id === editId) || null
+        : null,
+    [editId, employees]
+  );
+  const trendChartData = React.useMemo(() => {
+    if (!Array.isArray(summary.tren_kehadiran)) return [];
+    return summary.tren_kehadiran.slice(-8).map((item, idx) => {
+      const labelRaw = item.label || "";
+      const [weekPartRaw, dateRangeRaw] = labelRaw
+        .split("•")
+        .map((part) => part?.trim());
+      const weekShort = weekPartRaw
+        ? weekPartRaw.replace(/Minggu/i, "Mg")
+        : `Mg ${idx + 1}`;
+      const dateShort = dateRangeRaw?.replace(/\s+-\s+/g, " – ");
+      const axisLabel = [weekShort, dateShort].filter(Boolean).join("\n");
+      return {
+        axisLabel,
+        tooltip: labelRaw || weekShort,
+        value: item.value ?? 0,
+      };
+    });
+  }, [summary.tren_kehadiran]);
 
   /** 🔁 Load data dashboard (summary + pegawai) */
   const load = async () => {
@@ -138,63 +180,126 @@ export default function OwnerDashboard() {
     }
   }, [open, selectedJabatan, editId]);
 
+  React.useEffect(() => {
+    if (!open) {
+      setEmployeeFormErrors({});
+    }
+  }, [open]);
+
   /** ➕ Tambah Pegawai */
   const addEmployee = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const data = Object.fromEntries(fd.entries());
     const isEdit = Boolean(editId);
-    const nama = (data.nama || "").trim();
-    const jabatan = (data.jabatan || selectedJabatan || "").trim();
-    const telepon = (data.telepon || "").trim();
-    const email = (data.email || "").trim();
+    const normalizedJabatan = normalizeJabatanOption(
+      data.jabatan || selectedJabatan
+    );
+    const payload = {
+      nama: data.nama,
+      jabatan: normalizedJabatan,
+      telepon: data.telepon,
+      email: data.email,
+    };
 
-    if (!nama || !jabatan || !telepon || (!isEdit && !email)) {
-      toast.error("Lengkapi nama, jabatan, telepon, dan email!");
+    const formValidation = validateEmployeeData(payload);
+    if (Object.keys(formValidation).length > 0) {
+      setEmployeeFormErrors(formValidation);
+      const firstMsg = firstErrorMessage(formValidation) || "Semua field wajib diisi.";
+      toast.error(firstMsg);
       return;
+    }
+    setEmployeeFormErrors({});
+
+    const resolvedHourly =
+      Number(data.hourly_rate) ||
+      ROLE_RATE_MAP[normalizedJabatan] ||
+      ROLE_RATE_MAP.Supervisor ||
+      20000;
+
+    if (isEdit && editingPegawai) {
+      const incoming = {
+        nama: normalizeStr(payload.nama),
+        jabatan: normalizedJabatan,
+        telepon: normalizeStr(payload.telepon),
+        email: normalizeEmail(payload.email),
+        status: data.status || "Aktif",
+        hourly_rate: resolvedHourly,
+        role: deriveRoleFromJabatan(normalizedJabatan),
+      };
+
+      const existing = {
+        nama: normalizeStr(editingPegawai.nama),
+        jabatan: editingPegawai.jabatan,
+        telepon: normalizeStr(editingPegawai.telepon),
+        email: normalizeEmail(editingPegawai.email),
+        status: editingPegawai.status || "Aktif",
+        hourly_rate:
+          Number(editingPegawai.hourly_rate ?? 0) ||
+          ROLE_RATE_MAP[editingPegawai.jabatan] ||
+          ROLE_RATE_MAP.Supervisor ||
+          20000,
+        role: deriveRoleFromJabatan(editingPegawai.jabatan),
+      };
+
+      const isSame = Object.keys(incoming).every(
+        (key) => incoming[key] === existing[key]
+      );
+      if (isSame) {
+        toast.info("Tidak ada perubahan yang disimpan.");
+        setOpen(false);
+        setEditId(null);
+        e.target.reset();
+        return;
+      }
     }
 
     try {
       setLoading(true);
-      const normalizedJabatan = normalizeJabatanOption(jabatan);
-      const resolvedHourly =
-        Number(data.hourly_rate) ||
-        ROLE_RATE_MAP[normalizedJabatan] ||
-        ROLE_RATE_MAP.Supervisor ||
-        20000;
       if (editId) {
         await api.put(`/pegawai/${editId}`, {
-          nama,
+          nama: normalizeStr(payload.nama),
           jabatan: normalizedJabatan,
-          telepon,
+          telepon: normalizeStr(payload.telepon),
           status: data.status || "Aktif",
           hourly_rate: resolvedHourly,
+          email: normalizeEmail(payload.email),
+          role: deriveRoleFromJabatan(normalizedJabatan),
         });
-        toast.success(`Pegawai "${nama}" berhasil diperbarui.`);
+        toast.success(`Pegawai "${payload.nama}" berhasil diperbarui.`);
       } else {
         await api.post("/pegawai", {
-          nama,
+          nama: payload.nama,
           jabatan: normalizedJabatan,
-          telepon,
-          email,
+          telepon: payload.telepon,
+          email: payload.email,
           role: deriveRoleFromJabatan(normalizedJabatan),
           status: data.status || "Aktif",
           hourly_rate: resolvedHourly,
         });
-        toast.success(`Pegawai "${nama}" berhasil ditambahkan.`);
+        toast.success(`Pegawai "${payload.nama}" berhasil ditambahkan.`);
       }
       setOpen(false);
       setEditId(null);
       setSelectedJabatan(JABATAN_OPTIONS[0]);
+      setEmployeeFormErrors({});
+      // removed general error state
       e.target.reset();
       load();
     } catch (err) {
       console.error("Tambah pegawai error:", err.response?.data || err.message);
-      const msg =
-        err.response?.data?.message ||
-        err.response?.data?.error ||
-        "Gagal menambah pegawai";
-      toast.error(msg);
+      const backend = normalizeBackendErrors(err?.response?.data?.errors);
+      if (Object.keys(backend).length) {
+        setEmployeeFormErrors(backend);
+        const firstMsg = firstErrorMessage(backend);
+        toast.error(firstMsg || "Gagal menambah pegawai");
+      } else {
+        const msg =
+          err.response?.data?.message ||
+          err.response?.data?.error ||
+          "Gagal menambah pegawai";
+        toast.error(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -283,7 +388,7 @@ export default function OwnerDashboard() {
       {/* ===== Grafik Tren & Komposisi ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
-          <CardHeader className="flex items-center justify-between">
+          <CardHeader className="flex items-center justify-between pb-2 border-b border-[hsl(var(--border))]">
             <CardTitle className="text-[hsl(var(--foreground))] font-semibold">
               Tren Kehadiran Mingguan
             </CardTitle>
@@ -296,17 +401,10 @@ export default function OwnerDashboard() {
               Lihat Laporan
             </Button>
           </CardHeader>
-          <CardContent className="flex items-center justify-center">
-            <div className="w-full max-w-[540px]">
-              {summary.tren_kehadiran?.length > 0 ? (
-                <Sparkline
-                  data={summary.tren_kehadiran.map((d) => ({
-                    label: d.label,
-                    value: d.value,
-                  }))}
-                  height={150}
-                  width={360}
-                />
+          <CardContent className="pt-6 pb-8 px-2 sm:px-4 lg:px-6">
+            <div className="w-full">
+              {trendChartData.length > 0 ? (
+                <LineChart data={trendChartData} height={220} width={640} />
               ) : (
                 <p className="text-[hsl(var(--muted-foreground))] text-sm">Belum ada data kehadiran</p>
               )}
@@ -433,6 +531,7 @@ export default function OwnerDashboard() {
         onClose={() => {
           setOpen(false);
           setEditId(null);
+          setEmployeeFormErrors({});
         }}
       >
         <form
@@ -442,7 +541,13 @@ export default function OwnerDashboard() {
         >
           <div className="sm:col-span-2">
             <Label>Nama</Label>
-            <Input name="nama" required defaultValue={editId ? selectedPegawai?.nama : ""} />
+            <Input
+              name="nama"
+              required
+              requiredMessage="Nama wajib diisi."
+              defaultValue={editId ? selectedPegawai?.nama : ""}
+            />
+            <FieldError message={employeeFormErrors.nama} />
           </div>
           <div>
             <Label>Jabatan</Label>
@@ -459,20 +564,28 @@ export default function OwnerDashboard() {
                 </option>
               ))}
             </Select>
+            <FieldError message={employeeFormErrors.jabatan} />
           </div>
           <div>
             <Label>Telepon</Label>
-            <Input name="telepon" required defaultValue={editId ? selectedPegawai?.telepon : ""} />
+            <Input
+              name="telepon"
+              required
+              requiredMessage="Telepon wajib diisi."
+              defaultValue={editId ? selectedPegawai?.telepon : ""}
+            />
+            <FieldError message={employeeFormErrors.telepon} />
           </div>
           <div>
             <Label>Email (Login)</Label>
             <Input
               type="email"
               name="email"
-              required={!editId}
+              required
+              requiredMessage="Email wajib diisi."
               defaultValue={editId ? selectedPegawai?.email : ""}
-              disabled={Boolean(editId)}
             />
+            <FieldError message={employeeFormErrors.email} />
           </div>
           <div>
             <Label>Role</Label>
@@ -500,6 +613,8 @@ export default function OwnerDashboard() {
               min="0"
               step="1000"
               ref={hourlyRateRef}
+              required
+              requiredMessage="Tarif/Jam wajib diisi."
               defaultValue={
                 editId
                   ? selectedPegawai?.hourly_rate || ROLE_RATE_MAP.Supervisor

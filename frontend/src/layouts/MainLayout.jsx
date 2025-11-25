@@ -19,8 +19,8 @@ const navByRole = {
   ],
   supervisor: [
     { to: "/supervisor/dashboard", label: "Dashboard", icon: "fa-solid fa-gauge" },
-    { to: "/supervisor/jadwal", label: "Jadwal Kerja", icon: "fa-solid fa-clock" },
     { to: "/supervisor/employees", label: "Data Pegawai", icon: "fa-solid fa-users" },
+    { to: "/supervisor/jadwal", label: "Jadwal Kerja", icon: "fa-solid fa-clock" },
     { to: "/supervisor/absensi", label: "Absensi Pegawai", icon: "fa-solid fa-user-check" },
     { to: "/supervisor/rekap", label: "Rekap & Verifikasi", icon: "fa-solid fa-clipboard-check" },
     { to: "/supervisor/laporan", label: "Laporan Periodik", icon: "fa-solid fa-file-lines" },
@@ -35,7 +35,7 @@ const navByRole = {
 };
 
 /* ======================================================
-   🌙 Layout adaptif terang/gelap + Aurora dinamis
+   Layout adaptif terang/gelap + Aurora dinamis
    ====================================================== */
 export default function MainLayout() {
   const navigate = useNavigate();
@@ -98,33 +98,14 @@ export default function MainLayout() {
   };
 
   const [navAlert, setNavAlert] = useState(localStorage.getItem("smpj_nav_alert") || "");
-  const [navBadges, setNavBadges] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("smpj_supervisor_nav_badges") || "{}");
-    } catch {
-      return {};
-    }
-  });
   useEffect(() => {
     const handleAlert = () => setNavAlert(localStorage.getItem("smpj_nav_alert") || "");
-    const handleBadges = () => {
-      try {
-        setNavBadges(JSON.parse(localStorage.getItem("smpj_supervisor_nav_badges") || "{}"));
-      } catch {
-        setNavBadges({});
-      }
-    };
-    const handleStorage = () => {
-      handleAlert();
-      handleBadges();
-    };
+    const handleStorage = handleAlert;
     window.addEventListener("storage", handleStorage);
     window.addEventListener("smpj-nav-alert", handleAlert);
-    window.addEventListener("smpj-nav-badges-update", handleBadges);
     return () => {
       window.removeEventListener("storage", handleStorage);
       window.removeEventListener("smpj-nav-alert", handleAlert);
-      window.removeEventListener("smpj-nav-badges-update", handleBadges);
     };
   }, []);
 
@@ -317,11 +298,6 @@ export default function MainLayout() {
                 >
                   <i className={it.icon + " text-[16px]"} />
                   <span>{it.label}</span>
-                  {navBadges[it.to] > 0 && (
-                    <span className="ml-auto text-xs font-semibold bg-red-500 text-white px-2 py-0.5 rounded-full">
-                      {navBadges[it.to] > 9 ? "9+" : navBadges[it.to]}
-                    </span>
-                  )}
                 </NavLink>
               ))}
             </nav>
@@ -371,11 +347,6 @@ export default function MainLayout() {
               >
                 <i className={`${it.icon} text-base`} />
                 <span>{it.label}</span>
-                {navBadges[it.to] > 0 && (
-                  <span className="absolute -top-1 -right-1 text-[10px] font-semibold bg-red-500 text-white px-1.5 py-[1px] rounded-full">
-                    {navBadges[it.to] > 9 ? "9+" : navBadges[it.to]}
-                  </span>
-                )}
               </NavLink>
             ))}
           </nav>

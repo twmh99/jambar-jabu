@@ -8,6 +8,10 @@ return new class extends Migration
 {
     public function up()
     {
+        if (!Schema::hasTable('transactions')) {
+            return;
+        }
+
         Schema::table('transactions', function (Blueprint $table) {
             if (!Schema::hasColumn('transactions', 'tanggal')) {
                 $table->date('tanggal')->nullable()->after('pegawai_id');
@@ -17,6 +21,10 @@ return new class extends Migration
 
     public function down()
     {
+        if (!Schema::hasTable('transactions')) {
+            return;
+        }
+
         Schema::table('transactions', function (Blueprint $table) {
             if (Schema::hasColumn('transactions', 'tanggal')) {
                 $table->dropColumn('tanggal');

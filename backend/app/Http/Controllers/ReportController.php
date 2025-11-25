@@ -509,8 +509,8 @@ class ReportController extends Controller
 
                 $tipIndividual = round($tipAbsensi + $tipTransaksi);
 
-                $totalGaji  = $gajiDasar + $lemburBonus + $bonusShift + $penalti;
-                $totalBayar = $totalGaji + $tipIndividual + $tipGroupShare;
+                $totalGaji  = max(0, $gajiDasar + $lemburBonus + $bonusShift + $penalti);
+                $totalBayar = max(0, $totalGaji + $tipIndividual + $tipGroupShare);
 
                 // Validasi otomatis
                 if ($jamKerja > 18) {
@@ -637,7 +637,13 @@ class ReportController extends Controller
         $rows = $rows->values();
 
         $sumJam    = round($rows->sum(fn($r) => (float) $r['jam_kerja']), 2);
-        $sumGaji   = round($rows->sum(fn($r) => ($r['gaji_dasar'] ?? 0) + ($r['lembur'] ?? 0) + ($r['bonus_shift'] ?? 0) + ($r['penalti'] ?? 0)));
+        $sumGaji   = round($rows->sum(function ($r) {
+            $raw = ($r['gaji_dasar'] ?? 0)
+                + ($r['lembur'] ?? 0)
+                + ($r['bonus_shift'] ?? 0)
+                + ($r['penalti'] ?? 0);
+            return max(0, $raw);
+        }));
         $sumTip    = round($rows->sum(fn($r) => ($r['tip'] ?? 0) + ($r['tip_group'] ?? 0)));
         $sumTotal  = round($rows->sum(fn($r) => $r['total'] ?? 0));
 
@@ -647,7 +653,13 @@ class ReportController extends Controller
                 return [
                     'tanggal'     => $tanggal,
                     'total_jam'   => round($items->sum(fn($r) => (float) $r['jam_kerja']), 2),
-                    'total_gaji'  => round($items->sum(fn($r) => ($r['gaji_dasar'] ?? 0) + ($r['lembur'] ?? 0) + ($r['bonus_shift'] ?? 0) + ($r['penalti'] ?? 0))),
+                    'total_gaji'  => round($items->sum(function ($r) {
+                        $raw = ($r['gaji_dasar'] ?? 0)
+                            + ($r['lembur'] ?? 0)
+                            + ($r['bonus_shift'] ?? 0)
+                            + ($r['penalti'] ?? 0);
+                        return max(0, $raw);
+                    })),
                     'total_tip'   => round($items->sum(fn($r) => ($r['tip'] ?? 0) + ($r['tip_group'] ?? 0))),
                     'total_bayar' => round($items->sum(fn($r) => $r['total'] ?? 0)),
                 ];
@@ -666,7 +678,13 @@ class ReportController extends Controller
                 'label'       => 'Minggu ' . $date->isoWeek() . ' ' . $date->format('Y'),
                 'range'       => $start->format('d M') . ' - ' . $end->format('d M'),
                 'total_jam'   => round($items->sum(fn($r) => (float) $r['jam_kerja']), 2),
-                'total_gaji'  => round($items->sum(fn($r) => ($r['gaji_dasar'] ?? 0) + ($r['lembur'] ?? 0) + ($r['bonus_shift'] ?? 0) + ($r['penalti'] ?? 0))),
+                'total_gaji'  => round($items->sum(function ($r) {
+                    $raw = ($r['gaji_dasar'] ?? 0)
+                        + ($r['lembur'] ?? 0)
+                        + ($r['bonus_shift'] ?? 0)
+                        + ($r['penalti'] ?? 0);
+                    return max(0, $raw);
+                })),
                 'total_tip'   => round($items->sum(fn($r) => ($r['tip'] ?? 0) + ($r['tip_group'] ?? 0))),
                 'total_bayar' => round($items->sum(fn($r) => $r['total'] ?? 0)),
             ];
@@ -686,7 +704,13 @@ class ReportController extends Controller
                 '_sort'       => $label,
                 'label'       => $date->format('F Y'),
                 'total_jam'   => round($items->sum(fn($r) => (float) $r['jam_kerja']), 2),
-                'total_gaji'  => round($items->sum(fn($r) => ($r['gaji_dasar'] ?? 0) + ($r['lembur'] ?? 0) + ($r['bonus_shift'] ?? 0) + ($r['penalti'] ?? 0))),
+                'total_gaji'  => round($items->sum(function ($r) {
+                    $raw = ($r['gaji_dasar'] ?? 0)
+                        + ($r['lembur'] ?? 0)
+                        + ($r['bonus_shift'] ?? 0)
+                        + ($r['penalti'] ?? 0);
+                    return max(0, $raw);
+                })),
                 'total_tip'   => round($items->sum(fn($r) => ($r['tip'] ?? 0) + ($r['tip_group'] ?? 0))),
                 'total_bayar' => round($items->sum(fn($r) => $r['total'] ?? 0)),
             ];

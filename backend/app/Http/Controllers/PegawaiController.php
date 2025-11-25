@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use App\Models\Pegawai;
 use App\Models\User;
 use Carbon\Carbon;
@@ -14,7 +16,7 @@ use Carbon\Carbon;
 class PegawaiController extends Controller
 {
     /**
-     * 📋 Tampilkan semua pegawai beserta data user-nya
+     * Tampilkan semua pegawai beserta data user-nya
      */
     public function index()
     {
@@ -45,35 +47,38 @@ class PegawaiController extends Controller
         try {
             Log::info('📥 Data request masuk ke PegawaiController@store', $request->all());
 
-            $validated = $request->validate([
-                'nama'        => 'required|string|max:255',
-                'jabatan'     => 'nullable|string|max:255',
-                'telepon'     => 'nullable|string|max:20',
-                'status'      => 'nullable|in:Aktif,Nonaktif',
-                'hourly_rate' => 'nullable|numeric|min:0',
-                'email'       => 'required|email|unique:users,email',
-                'role'        => 'nullable|in:employee,supervisor,owner',
-            ]);
+            $validator = $this->pegawaiValidator($request->all());
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Validasi gagal.',
+                    'errors'  => $validator->errors(),
+                ], 422);
+            }
 
-            // ✅ Simpan data pegawai
+            $validated = $validator->validated();
+            $cleanNama    = trim($validated['nama']);
+            $cleanEmail   = strtolower(trim($validated['email']));
+            $cleanTelepon = preg_replace('/\s+/', ' ', trim($validated['telepon']));
+            $jabatan      = trim($validated['jabatan']);
+            $status       = $validated['status'] ?? 'Aktif';
+            $role         = $validated['role'] ?? ($jabatan === 'Supervisor' ? 'supervisor' : 'employee');
+
             $pegawai = Pegawai::create([
-                'nama'        => $validated['nama'],
-                'jabatan'     => $validated['jabatan'] ?? null,
-                'telepon'     => $validated['telepon'] ?? null,
-                'status'      => $validated['status'] ?? 'Aktif',
+                'nama'        => $cleanNama,
+                'jabatan'     => $jabatan,
+                'telepon'     => $cleanTelepon,
+                'status'      => $status,
                 'hourly_rate' => $validated['hourly_rate'] ?? 20000,
-                'email'       => $validated['email'],
+                'email'       => $cleanEmail,
             ]);
 
-            // ✅ Password default tetap "Password123"
             $defaultPassword = 'Password123';
 
-            // ✅ Buat akun user
             $user = User::create([
                 'name'           => $pegawai->nama,
-                'email'          => $validated['email'],
+                'email'          => $cleanEmail,
                 'password'       => Hash::make($defaultPassword),
-                'role'           => $validated['role'] ?? 'employee',
+                'role'           => $role,
                 'pegawai_id'     => $pegawai->id,
                 'is_first_login' => true,
             ]);
@@ -146,12 +151,6 @@ class PegawaiController extends Controller
                 ],
             ], 201);
         }
-        catch (\Illuminate\Validation\ValidationException $ve) {
-            return response()->json([
-                'message' => 'Validasi gagal.',
-                'errors'  => $ve->errors(),
-            ], 422);
-        }
         catch (\Throwable $e) {
             Log::error("Gagal menyimpan pegawai: {$e->getMessage()}", ['trace' => $e->getTraceAsString()]);
             return response()->json([
@@ -164,24 +163,58 @@ class PegawaiController extends Controller
     /** ✏️ Update data pegawai */
     public function update(Request $request, $id)
     {
-        $pegawai = Pegawai::find($id);
+        $pegawai = Pegawai::with('user')->find($id);
         if (!$pegawai) {
             return response()->json(['message' => 'Pegawai tidak ditemukan.'], 404);
         }
 
-        $data = $request->validate([
-            'nama'        => 'sometimes|required|string|max:255',
-            'jabatan'     => 'nullable|string|max:255',
-            'telepon'     => 'nullable|string|max:20',
-            'status'      => 'nullable|in:Aktif,Nonaktif',
-            'hourly_rate' => 'nullable|numeric|min:0',
-        ]);
+        $validator = $this->pegawaiValidator($request->all(), $pegawai->id, $pegawai->user?->id);
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'Validasi gagal.',
+                'errors'  => $validator->errors(),
+            ], 422);
+        }
 
-        $pegawai->update($data);
+        $validated    = $validator->validated();
+        $cleanNama    = trim($validated['nama']);
+        $cleanEmail   = strtolower(trim($validated['email']));
+        $cleanTelepon = preg_replace('/\s+/', ' ', trim($validated['telepon']));
+        $jabatan      = trim($validated['jabatan']);
+        $status       = $validated['status'];
+        $role         = $validated['role'] ?? ($jabatan === 'Supervisor' ? 'supervisor' : 'employee');
+
+        DB::beginTransaction();
+        try {
+            $pegawai->update([
+                'nama'        => $cleanNama,
+                'jabatan'     => $jabatan,
+                'telepon'     => $cleanTelepon,
+                'status'      => $status,
+                'hourly_rate' => $validated['hourly_rate'],
+                'email'       => $cleanEmail,
+            ]);
+
+            if ($pegawai->user) {
+                $pegawai->user->update([
+                    'name'  => $cleanNama,
+                    'email' => $cleanEmail,
+                    'role'  => $role,
+                ]);
+            }
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error("❌ Gagal update pegawai: " . $e->getMessage());
+            return response()->json([
+                'message' => 'Gagal menyimpan data pegawai.',
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
 
         return response()->json([
             'message' => 'Data pegawai berhasil diperbarui.',
-            'data'    => $pegawai,
+            'data'    => $pegawai->fresh('user'),
         ]);
     }
 
@@ -251,5 +284,30 @@ class PegawaiController extends Controller
         $user->save();
 
         return response()->json(['message' => 'Password berhasil diubah.'], 200);
+    }
+
+
+    private function pegawaiValidator(array $data, ?int $pegawaiId = null, ?int $userId = null)
+    {
+        $allowedJabatan = ['Kasir', 'Koki', 'Pelayan', 'Tukang Kebun', 'Supervisor'];
+
+        $messages = [
+            '*.required'     => 'Semua field wajib diisi.',
+            'nama.unique'    => 'Nama sudah digunakan. Silakan gunakan nama lain.',
+            'email.unique'   => 'Email ini sudah terdaftar. Gunakan email lain.',
+            'email.email'    => 'Format email tidak valid.',
+            'telepon.unique' => 'Nomor telepon sudah terdaftar.',
+            'telepon.regex'  => 'Nomor telepon tidak valid.',
+        ];
+
+        return Validator::make($data, [
+            'nama'        => ['required', 'string', 'max:255', Rule::unique('pegawai', 'nama')->ignore($pegawaiId)],
+            'jabatan'     => ['required', 'string', 'max:255', Rule::in($allowedJabatan)],
+            'telepon'     => ['required', 'string', 'max:20', 'regex:/^[0-9+\-()\s]{8,}$/', Rule::unique('pegawai', 'telepon')->ignore($pegawaiId)],
+            'status'      => ['required', Rule::in(['Aktif', 'Nonaktif'])],
+            'hourly_rate' => ['required', 'numeric', 'min:0'],
+            'email'       => ['required', 'email', Rule::unique('users', 'email')->ignore($userId)],
+            'role'        => ['nullable', Rule::in(['employee', 'supervisor', 'owner'])],
+        ], $messages);
     }
 }

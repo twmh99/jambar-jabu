@@ -8,10 +8,59 @@ import ConfirmDeleteModal from "../../components/ui/ConfirmDeleteModal";
 import { toast } from "../../components/ui/toast";
 import api from "../../services/api";
 import SearchInput from "../../components/common/SearchInput";
+import { normalizeBackendErrors, firstErrorMessage } from "../../utils/validation";
+
+const FieldError = ({ message }) =>
+  message ? (
+    <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+      <i className="fa-solid fa-circle-exclamation" />
+      {message}
+    </p>
+  ) : null;
+
+const validateSchedulePayload = (payload = {}) => {
+  const errors = {};
+  const toMinutes = (time) => {
+    if (!time) return null;
+    const [h = "0", m = "0"] = time.split(":");
+    const hour = Number(h);
+    const minute = Number(m);
+    if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+    return hour * 60 + minute;
+  };
+
+  if (!payload.pegawai_id) errors.pegawai_id = "Pegawai wajib dipilih.";
+  if (!payload.shift) errors.shift = "Shift wajib dipilih.";
+  if (!payload.tanggal) {
+    errors.tanggal = "Tanggal wajib dipilih.";
+  } else {
+    const dateValue = new Date(payload.tanggal);
+    if (Number.isNaN(dateValue.getTime())) {
+      errors.tanggal = "Tanggal tidak valid.";
+    } else {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (dateValue < today) {
+        errors.tanggal = "Tanggal jadwal sudah terlewat. Harap pilih tanggal yang akan datang.";
+      }
+    }
+  }
+  if (!payload.jam_mulai) errors.jam_mulai = "Jam mulai wajib diisi.";
+  if (!payload.jam_selesai) errors.jam_selesai = "Jam selesai wajib diisi.";
+
+  const startMinutes = toMinutes(payload.jam_mulai);
+  const endMinutes = toMinutes(payload.jam_selesai);
+  if (startMinutes !== null && endMinutes !== null && endMinutes <= startMinutes) {
+    errors.jam_selesai = "Jam selesai harus lebih besar dari jam mulai.";
+  }
+
+  return errors;
+};
 
 export default function JadwalKerjaBase({ role = "supervisor" }) {
     const [rows, setRows] = React.useState([]);
     const [employees, setEmployees] = React.useState([]);
+    const [employeeMap, setEmployeeMap] = React.useState({});
     const [pegawaiId, setPegawaiId] = React.useState("");
     const [selectedEdit, setSelectedEdit] = React.useState(null);
     const [modalAdd, setModalAdd] = React.useState(false);
@@ -31,6 +80,13 @@ export default function JadwalKerjaBase({ role = "supervisor" }) {
     const [modalDetail, setModalDetail] = React.useState(false);
     const [deleteModalOpen, setDeleteModalOpen] = React.useState(false);
     const [deleteTarget, setDeleteTarget] = React.useState(null);
+    const [scheduleErrors, setScheduleErrors] = React.useState({});
+    const [editErrors, setEditErrors] = React.useState({});
+    const closeEditModal = () => {
+        setModalEdit(false);
+        setSelectedEdit(null);
+        setEditErrors({});
+    };
 
     // Preset rentang dan shift otomatis
     const rangeOptions = [
@@ -140,14 +196,26 @@ export default function JadwalKerjaBase({ role = "supervisor" }) {
         try {
             const res = await api.get("/pegawai");
             const list = Array.isArray(res.data?.data) ? res.data.data : [];
+            const map = {};
+            list.forEach((p) => {
+                const roleName = (p.user?.role || p.role || "").toLowerCase();
+                map[String(p.id)] = {
+                    role: roleName,
+                    jabatan: (p.jabatan || "").toLowerCase(),
+                };
+            });
+            setEmployeeMap(map);
+
             const allowedList =
                 role === "supervisor"
-                    ? list.filter((p) => (p.role || "").toLowerCase() !== "supervisor")
+                    ? list.filter((p) => (p.user?.role || p.role || "").toLowerCase() !== "supervisor")
                     : list;
             setEmployees(
                 allowedList.map((p) => ({
                     value: p.id,
                     label: `${p.nama} (${p.jabatan || "Tanpa jabatan"})`,
+                    jabatan: p.jabatan,
+                    role: (p.user?.role || p.role || "").toLowerCase(),
                 }))
             );
         } catch (err) {
@@ -174,6 +242,22 @@ export default function JadwalKerjaBase({ role = "supervisor" }) {
         }
     }, [employees, pegawaiId]);
 
+    React.useEffect(() => {
+        if (!modalAdd) {
+            setScheduleErrors({});
+        }
+    }, [modalAdd]);
+
+    const isSupervisorTarget = React.useCallback(
+        (targetId) => {
+            if (role !== "supervisor") return false;
+            const info = employeeMap[String(targetId)];
+            if (!info) return false;
+            return info.role === "supervisor" || info.jabatan === "supervisor";
+        },
+        [role, employeeMap]
+    );
+
     // ➕ Tambah jadwal
     const createSchedule = async (e) => {
         e.preventDefault();
@@ -188,16 +272,26 @@ export default function JadwalKerjaBase({ role = "supervisor" }) {
             jam_selesai: data.jam_selesai,
         };
 
-        if (!payloadBase.pegawai_id || !payloadBase.tanggal || !payloadBase.shift) {
-            toast.error("Lengkapi semua data jadwal!");
+        if (isSupervisorTarget(payloadBase.pegawai_id)) {
+            toast.error("Supervisor tidak dapat membuat jadwal untuk sesama supervisor.");
             return;
         }
+
+        const validation = validateSchedulePayload(payloadBase);
+        if (Object.keys(validation).length > 0) {
+            setScheduleErrors(validation);
+            const msg = firstErrorMessage(validation) || "Semua informasi jadwal wajib diisi.";
+            toast.error(msg);
+            return;
+        }
+        setScheduleErrors({});
 
         const rangeDays = Number.parseInt(data.rentang_waktu || "1", 10);
         const totalDays = Number.isFinite(rangeDays) && rangeDays > 0 ? rangeDays : 1;
         const baseDate = new Date(payloadBase.tanggal);
         if (Number.isNaN(baseDate.getTime())) {
             toast.error("Tanggal tidak valid.");
+            setScheduleErrors({ tanggal: "Tanggal tidak valid." });
             return;
         }
 
@@ -215,6 +309,7 @@ export default function JadwalKerjaBase({ role = "supervisor" }) {
                     ? `Jadwal berhasil dibuat untuk ${totalDays} hari berturut-turut.`
                     : "Jadwal berhasil dibuat"
             );
+            setScheduleErrors({});
             setModalAdd(false);
             setPegawaiId("");
             await load(filterPegawaiId || payloadBase.pegawai_id, filterMode);
@@ -224,7 +319,15 @@ export default function JadwalKerjaBase({ role = "supervisor" }) {
             setFilterDate(payloadBase.tanggal);
         } catch (err) {
             console.error(err);
-            toast.error(err?.response?.data?.message || "Gagal membuat jadwal");
+            const backend = normalizeBackendErrors(err?.response?.data?.errors);
+            if (Object.keys(backend).length) {
+                setScheduleErrors(backend);
+                const msg = firstErrorMessage(backend) || err?.response?.data?.message;
+                toast.error(msg || "Gagal membuat jadwal");
+            } else {
+                const msg = err?.response?.data?.message || "Gagal membuat jadwal";
+                toast.error(msg);
+            }
         }
     };
 
@@ -234,6 +337,12 @@ export default function JadwalKerjaBase({ role = "supervisor" }) {
         const fd = new FormData(e.currentTarget);
         const data = Object.fromEntries(fd.entries());
 
+        if (!selectedEdit) return;
+
+        const normalize = (val = "") => (val || "").toString().trim();
+        const normalizeId = (val) => String(val ?? "");
+        const normalizeTime = (val = "") => normalize(val).slice(0, 5);
+        setEditErrors({});
         const payload = {
             pegawai_id: data.pegawai_id || selectedEdit.pegawai_id,
             tanggal: data.tanggal,
@@ -242,14 +351,51 @@ export default function JadwalKerjaBase({ role = "supervisor" }) {
             jam_selesai: data.jam_selesai,
         };
 
+        if (isSupervisorTarget(payload.pegawai_id)) {
+            toast.error("Supervisor tidak dapat mengubah jadwal sesama supervisor.");
+            return;
+        }
+
+        const incoming = {
+            pegawai_id: normalizeId(payload.pegawai_id),
+            tanggal: payload.tanggal,
+            shift: payload.shift,
+            jam_mulai: normalizeTime(payload.jam_mulai),
+            jam_selesai: normalizeTime(payload.jam_selesai),
+        };
+        const existing = {
+            pegawai_id: normalizeId(selectedEdit.pegawai_id),
+            tanggal: selectedEdit.tanggal,
+            shift: selectedEdit.shift,
+            jam_mulai: normalizeTime(selectedEdit.jam_mulai),
+            jam_selesai: normalizeTime(selectedEdit.jam_selesai),
+        };
+        const noChanges = Object.keys(incoming).every((key) => incoming[key] === existing[key]);
+        if (noChanges) {
+            toast.info("Tidak ada perubahan pada jadwal.");
+            closeEditModal();
+            return;
+        }
+        const validation = validateSchedulePayload(payload);
+        if (Object.keys(validation).length > 0) {
+            setEditErrors(validation);
+            toast.error(firstErrorMessage(validation) || "Periksa kembali data jadwal.");
+            return;
+        }
+
         try {
             await api.put(`/jadwal/${selectedEdit.id}`, payload);
             toast.success("Jadwal berhasil diperbarui");
-            setModalEdit(false);
-            setSelectedEdit(null);
+            closeEditModal();
             await load();
         } catch (err) {
-            toast.error(err?.response?.data?.message || "Gagal memperbarui jadwal");
+            const backend = normalizeBackendErrors(err?.response?.data?.errors);
+            if (Object.keys(backend).length) {
+                setEditErrors(backend);
+                toast.error(firstErrorMessage(backend) || "Gagal memperbarui jadwal");
+            } else {
+                toast.error(err?.response?.data?.message || "Gagal memperbarui jadwal");
+            }
         }
     };
 
@@ -698,6 +844,7 @@ export default function JadwalKerjaBase({ role = "supervisor" }) {
                                 </option>
                             ))}
                         </select>
+                        <FieldError message={scheduleErrors.pegawai_id} />
                     </div>
 
                     <div>
@@ -726,11 +873,13 @@ export default function JadwalKerjaBase({ role = "supervisor" }) {
                         <small className="text-xs text-gray-500">
                             Otomatis isi jam kerja sesuai shift (bisa disesuaikan).
                         </small>
+                        <FieldError message={scheduleErrors.shift} />
                     </div>
 
                     <div>
                         <Label>Tanggal</Label>
                         <Input type="date" name="tanggal" required />
+                        <FieldError message={scheduleErrors.tanggal} />
                     </div>
 
                     <div>
@@ -750,11 +899,13 @@ export default function JadwalKerjaBase({ role = "supervisor" }) {
                     <div>
                         <Label>Jam Mulai</Label>
                         <Input type="time" name="jam_mulai" required />
+                        <FieldError message={scheduleErrors.jam_mulai} />
                     </div>
 
                     <div>
                         <Label>Jam Selesai</Label>
                         <Input type="time" name="jam_selesai" required />
+                        <FieldError message={scheduleErrors.jam_selesai} />
                     </div>
 
                     <div className="flex justify-end gap-2">
@@ -770,7 +921,7 @@ export default function JadwalKerjaBase({ role = "supervisor" }) {
             <Modal
                 open={modalEdit}
                 title="Edit Jadwal"
-                onClose={() => setModalEdit(false)}
+                onClose={closeEditModal}
             >
                 {selectedEdit && (
                     <form onSubmit={updateSchedule} className="space-y-4">
@@ -804,29 +955,33 @@ export default function JadwalKerjaBase({ role = "supervisor" }) {
                                 <option value="Pagi">Pagi</option>
                                 <option value="Siang">Siang</option>
                                 <option value="Malam">Malam</option>
-                            </select>
-                            <small className="text-xs text-gray-500">
-                                Otomatis isi jam kerja sesuai shift (bisa disesuaikan).
-                            </small>
-                        </div>
+                        </select>
+                        <small className="text-xs text-gray-500">
+                            Otomatis isi jam kerja sesuai shift (bisa disesuaikan).
+                        </small>
+                        <FieldError message={editErrors.shift} />
+                    </div>
 
-                        <div>
-                            <Label>Tanggal</Label>
-                            <Input type="date" name="tanggal" defaultValue={selectedEdit.tanggal} required />
-                        </div>
+                    <div>
+                        <Label>Tanggal</Label>
+                        <Input type="date" name="tanggal" defaultValue={selectedEdit.tanggal} required />
+                        <FieldError message={editErrors.tanggal} />
+                    </div>
 
-                        <div>
-                            <Label>Jam Mulai</Label>
-                            <Input type="time" name="jam_mulai" defaultValue={selectedEdit.jam_mulai} required />
-                        </div>
+                    <div>
+                        <Label>Jam Mulai</Label>
+                        <Input type="time" name="jam_mulai" defaultValue={selectedEdit.jam_mulai} required />
+                        <FieldError message={editErrors.jam_mulai} />
+                    </div>
 
-                        <div>
-                            <Label>Jam Selesai</Label>
-                            <Input type="time" name="jam_selesai" defaultValue={selectedEdit.jam_selesai} required />
-                        </div>
+                    <div>
+                        <Label>Jam Selesai</Label>
+                        <Input type="time" name="jam_selesai" defaultValue={selectedEdit.jam_selesai} required />
+                        <FieldError message={editErrors.jam_selesai} />
+                    </div>
 
                         <div className="flex justify-end gap-2">
-                            <Button type="button" variant="neutral" onClick={() => setModalEdit(false)}>
+                            <Button type="button" variant="neutral" onClick={closeEditModal}>
                                 Batal
                             </Button>
                             <Button type="submit">Simpan</Button>

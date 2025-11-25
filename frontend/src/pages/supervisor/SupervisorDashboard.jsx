@@ -2,18 +2,25 @@ import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Table, TBody, THead, TH, TR, TD } from "../../components/ui/table";
-import { Input, Label } from "../../components/ui/input";
+import { Input, Label, Select } from "../../components/ui/input";
 import Modal from "../../components/common/Modal";
 import { toast } from "../../components/ui/toast";
 import api from "../../services/api";
 import { Sparkline } from "../../components/charts/Sparkline";
 import { useNavigate } from "react-router-dom";
+import { normalizeBackendErrors, firstErrorMessage } from "../../utils/validation";
 
 const shiftTimes = {
   Pagi: { jam_mulai: "09:00", jam_selesai: "14:00" },
   Siang: { jam_mulai: "14:00", jam_selesai: "19:00" },
   Malam: { jam_mulai: "19:00", jam_selesai: "00:00" },
 };
+const rangeOptions = [
+  { value: 1, label: "Hanya tanggal ini (1 hari)" },
+  { value: 7, label: "Selama 1 minggu (7 hari)" },
+  { value: 14, label: "Selama 2 minggu (14 hari)" },
+  { value: 30, label: "Selama 1 bulan (30 hari)" },
+];
 
 const truncate = (text, length = 32) => {
   if (!text) return "—";
@@ -99,20 +106,56 @@ export default function SupervisorDashboard() {
   const [pullHint, setPullHint] = React.useState(0);
   const pullHintRef = React.useRef(0);
   const isRefreshing = React.useRef(false);
+  const [scheduleErrors, setScheduleErrors] = React.useState({});
+  React.useEffect(() => {
+    if (!modalAdd) setScheduleErrors({});
+  }, [modalAdd]);
   const employeeOptions = React.useMemo(
     () =>
-      employees.map((p) => ({
-        value: p.id,
-        label: `${p.nama} (${p.jabatan || "Tanpa jabatan"})`,
-      })),
+      employees
+        .filter(
+          (p) =>
+            (p.user?.role || p.role || "").toLowerCase() !== "supervisor" &&
+            (p.jabatan || "").toLowerCase() !== "supervisor"
+        )
+        .map((p) => ({
+          value: String(p.id),
+          label: `${p.nama} (${p.jabatan || "Tanpa jabatan"})`,
+          role: (p.user?.role || p.role || "").toLowerCase(),
+          jabatan: (p.jabatan || "").toLowerCase(),
+        })),
     [employees]
   );
 
   const pegawaiMap = React.useMemo(() => {
     const map = new Map();
-    employees.forEach((p) => map.set(p.id, p));
+    employees.forEach((p) => {
+      map.set(p.id, p);
+      map.set(String(p.id), p);
+    });
     return map;
   }, [employees]);
+
+  const isSupervisorTarget = React.useCallback(
+    (targetId) => {
+      if (!targetId) return false;
+      const info =
+        pegawaiMap.get(targetId) ||
+        pegawaiMap.get(String(targetId)) ||
+        pegawaiMap.get(Number(targetId));
+      if (!info) return false;
+      const roleName = (info.user?.role || info.role || "").toLowerCase();
+      const job = (info.jabatan || "").toLowerCase();
+      return roleName === "supervisor" || job === "supervisor";
+    },
+    [pegawaiMap]
+  );
+
+  React.useEffect(() => {
+    if (!pegawaiId && employeeOptions.length) {
+      setPegawaiId(employeeOptions[0].value);
+    }
+  }, [pegawaiId, employeeOptions]);
 
   const downloadAttendanceCSV = () => {
     if (!absensiToday.length) {
@@ -153,7 +196,11 @@ export default function SupervisorDashboard() {
         api.get("/absensi"),
       ]);
 
-      const jadwalData = Array.isArray(jadwalToday.data) ? jadwalToday.data : [];
+      const jadwalData = Array.isArray(jadwalToday.data?.data)
+        ? jadwalToday.data.data
+        : Array.isArray(jadwalToday.data)
+        ? jadwalToday.data
+        : [];
       const absensiData = Array.isArray(absTodayRes.data) ? absTodayRes.data : [];
       const employeeList = Array.isArray(allEmployees.data?.data)
         ? allEmployees.data.data
@@ -260,19 +307,84 @@ export default function SupervisorDashboard() {
       jam_mulai: fd.get("jam_mulai"),
       jam_selesai: fd.get("jam_selesai"),
     };
+    const rentangHari = Number.parseInt(fd.get("rentang_waktu") || "1", 10);
+    const totalDays = Number.isFinite(rentangHari) && rentangHari > 0 ? rentangHari : 1;
 
-    if (!payload.pegawai_id || !payload.tanggal || !payload.shift || !payload.jam_mulai || !payload.jam_selesai) {
-      toast.error("Lengkapi data jadwal!");
+    if (isSupervisorTarget(payload.pegawai_id)) {
+      toast.error("Supervisor tidak dapat membuat jadwal untuk sesama supervisor.");
       return;
     }
 
+    const validation = validateSchedulePayload(payload);
+    if (Object.keys(validation).length > 0) {
+      setScheduleErrors(validation);
+      const msg = firstErrorMessage(validation) || "Lengkapi data jadwal!";
+      toast.error(msg);
+      return;
+    }
+    setScheduleErrors({});
+
     try {
-      await api.post("/jadwal", payload);
-      toast.success("Jadwal berhasil dibuat");
+      const baseDate = new Date(payload.tanggal);
+      const createdEntries = [];
+      const todayStr = new Date().toISOString().split("T")[0];
+      const pegawaiInfo =
+        employees.find((emp) => String(emp.id) === String(payload.pegawai_id)) || {};
+
+      for (let i = 0; i < totalDays; i += 1) {
+        const targetDate = new Date(baseDate);
+        targetDate.setDate(baseDate.getDate() + i);
+        const formattedDate = targetDate.toISOString().split("T")[0];
+        await api.post("/jadwal", {
+          ...payload,
+          tanggal: formattedDate,
+        });
+        if (formattedDate === todayStr) {
+          createdEntries.push({
+            pegawai_id: payload.pegawai_id,
+            nama: pegawaiInfo.nama || `Pegawai #${payload.pegawai_id}`,
+            shift: payload.shift,
+            jam_mulai: payload.jam_mulai,
+            jam_selesai: payload.jam_selesai,
+            tanggal: formattedDate,
+          });
+        }
+      }
+
+      toast.success(
+        totalDays > 1
+          ? `Jadwal berhasil dibuat untuk ${totalDays} hari berturut-turut.`
+          : "Jadwal berhasil dibuat"
+      );
       setModalAdd(false);
-      loadAll();
+      if (createdEntries.length) {
+        setSchedules((prev) => {
+          const existingKeys = new Set(
+            prev.map(
+              (entry) =>
+                `${entry.pegawai_id}-${entry.tanggal}-${entry.jam_mulai}-${entry.jam_selesai}`
+            )
+          );
+          const merged = [...prev];
+          createdEntries.forEach((entry) => {
+            const key = `${entry.pegawai_id}-${entry.tanggal}-${entry.jam_mulai}-${entry.jam_selesai}`;
+            if (!existingKeys.has(key)) {
+              existingKeys.add(key);
+              merged.push(entry);
+            }
+          });
+          return merged;
+        });
+      }
+      await loadAll();
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Gagal membuat jadwal");
+      const backend = normalizeBackendErrors(err?.response?.data?.errors);
+      if (Object.keys(backend).length) {
+        setScheduleErrors(backend);
+        toast.error(firstErrorMessage(backend) || "Gagal membuat jadwal");
+      } else {
+        toast.error(err?.response?.data?.message || "Gagal membuat jadwal");
+      }
     }
   };
 
@@ -481,6 +593,7 @@ export default function SupervisorDashboard() {
                 </option>
               ))}
             </select>
+            <FieldError message={scheduleErrors.pegawai_id} />
           </div>
 
           {/* === SHIFT === */}
@@ -509,24 +622,43 @@ export default function SupervisorDashboard() {
             <small className="text-xs text-gray-500">
               Otomatis isi jam kerja sesuai shift (bisa disesuaikan).
             </small>
+            <FieldError message={scheduleErrors.shift} />
           </div>
 
           {/* === TANGGAL === */}
           <div>
             <Label>Tanggal</Label>
             <Input type="date" name="tanggal" required />
+            <FieldError message={scheduleErrors.tanggal} />
+          </div>
+
+          {/* === RENTANG WAKTU === */}
+          <div>
+            <Label>Rentang Waktu</Label>
+            <select name="rentang_waktu" defaultValue="1" className="ds-input w-full">
+              {rangeOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <small className="text-xs text-gray-500">
+              Jadwal akan otomatis digandakan tiap hari selama rentang yang dipilih.
+            </small>
           </div>
 
           {/* === JAM MULAI === */}
           <div>
             <Label>Jam Mulai</Label>
             <Input type="time" name="jam_mulai" required />
+            <FieldError message={scheduleErrors.jam_mulai} />
           </div>
 
           {/* === JAM SELESAI === */}
           <div>
             <Label>Jam Selesai</Label>
             <Input type="time" name="jam_selesai" required />
+            <FieldError message={scheduleErrors.jam_selesai} />
           </div>
 
           <div className="flex justify-end gap-2">
@@ -681,3 +813,49 @@ export default function SupervisorDashboard() {
     </div>
   );
 }
+const FieldError = ({ message }) =>
+  message ? (
+    <p className="mt-1 text-xs text-red-600 flex items-center gap-1">
+      <i className="fa-solid fa-circle-exclamation" />
+      {message}
+    </p>
+  ) : null;
+
+const validateSchedulePayload = (payload = {}) => {
+  const errors = {};
+  const toMinutes = (time) => {
+    if (!time) return null;
+    const [h = "0", m = "0"] = time.split(":");
+    const hour = Number(h);
+    const minute = Number(m);
+    if (Number.isNaN(hour) || Number.isNaN(minute)) return null;
+    return hour * 60 + minute;
+  };
+
+  if (!payload.pegawai_id) errors.pegawai_id = "Pegawai wajib dipilih.";
+  if (!payload.shift) errors.shift = "Shift wajib dipilih.";
+  if (!payload.tanggal) {
+    errors.tanggal = "Tanggal wajib dipilih.";
+  } else {
+    const dateValue = new Date(payload.tanggal);
+    if (Number.isNaN(dateValue.getTime())) {
+      errors.tanggal = "Tanggal tidak valid.";
+    } else {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (dateValue < today) {
+        errors.tanggal = "Tanggal jadwal sudah terlewat. Harap pilih tanggal yang akan datang.";
+      }
+    }
+  }
+  if (!payload.jam_mulai) errors.jam_mulai = "Jam mulai wajib diisi.";
+  if (!payload.jam_selesai) errors.jam_selesai = "Jam selesai wajib diisi.";
+
+  const startMinutes = toMinutes(payload.jam_mulai);
+  const endMinutes = toMinutes(payload.jam_selesai);
+  if (startMinutes !== null && endMinutes !== null && endMinutes <= startMinutes) {
+    errors.jam_selesai = "Jam selesai harus lebih besar dari jam mulai.";
+  }
+
+  return errors;
+};

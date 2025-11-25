@@ -6,6 +6,7 @@ use App\Models\Jadwal;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
 
 class JadwalController extends Controller
@@ -50,19 +51,34 @@ class JadwalController extends Controller
         try {
             $data = $request->all();
 
-            // alias compatibility
             if (isset($data['employee_id']) && !isset($data['pegawai_id'])) {
                 $data['pegawai_id'] = $data['employee_id'];
                 unset($data['employee_id']);
             }
 
-            $validated = validator($data, [
-                'pegawai_id'  => 'required|exists:pegawai,id',
-                'tanggal'     => 'required|date',
-                'shift'       => 'required|string|max:50',
-                'jam_mulai'   => 'required|date_format:H:i',
-                'jam_selesai' => 'required|date_format:H:i',
-            ])->validate();
+            $validator = Validator::make($data, $this->scheduleRules(), $this->scheduleMessages());
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Validasi gagal.',
+                    'errors'  => $validator->errors(),
+                ], 422);
+            }
+
+            $validated = $validator->validated();
+
+            if ($this->hasScheduleConflict(
+                $validated['pegawai_id'],
+                $validated['tanggal'],
+                $validated['jam_mulai'],
+                $validated['jam_selesai']
+            )) {
+                return response()->json([
+                    'message' => 'Validasi gagal.',
+                    'errors'  => [
+                        'tanggal' => ['Pegawai sudah memiliki jadwal di waktu tersebut.'],
+                    ],
+                ], 422);
+            }
 
             $jadwal = Jadwal::create($validated);
 
@@ -196,13 +212,29 @@ class JadwalController extends Controller
                 unset($data['employee_id']);
             }
 
-            $validated = validator($data, [
-                'pegawai_id'  => 'sometimes|required|exists:pegawai,id',
-                'tanggal'     => 'sometimes|required|date',
-                'shift'       => 'nullable|string|max:50',
-                'jam_mulai'   => 'nullable|date_format:H:i',
-                'jam_selesai' => 'nullable|date_format:H:i',
-            ])->validate();
+            $validator = Validator::make($data, $this->scheduleRules(true), $this->scheduleMessages());
+            if ($validator->fails()) {
+                return response()->json([
+                    'message' => 'Validasi gagal.',
+                    'errors'  => $validator->errors(),
+                ], 422);
+            }
+
+            $validated = $validator->validated();
+
+            $pegawaiId  = $validated['pegawai_id'] ?? $jadwal->pegawai_id;
+            $tanggal    = $validated['tanggal'] ?? $jadwal->tanggal;
+            $jamMulai   = $validated['jam_mulai'] ?? $jadwal->jam_mulai;
+            $jamSelesai = $validated['jam_selesai'] ?? $jadwal->jam_selesai;
+
+            if ($this->hasScheduleConflict($pegawaiId, $tanggal, $jamMulai, $jamSelesai, $jadwal->id)) {
+                return response()->json([
+                    'message' => 'Validasi gagal.',
+                    'errors'  => [
+                        'tanggal' => ['Pegawai sudah memiliki jadwal di waktu tersebut.'],
+                    ],
+                ], 422);
+            }
 
             $jadwal->update($validated);
 
@@ -285,5 +317,42 @@ class JadwalController extends Controller
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+    private function scheduleRules(bool $isUpdate = false): array
+    {
+        return [
+            'pegawai_id'  => [$isUpdate ? 'sometimes' : 'required', 'exists:pegawai,id'],
+            'tanggal'     => [$isUpdate ? 'sometimes' : 'required', 'date'],
+            'shift'       => [$isUpdate ? 'sometimes' : 'required', 'string', 'max:50'],
+            'jam_mulai'   => [$isUpdate ? 'sometimes' : 'required', 'date_format:H:i'],
+            'jam_selesai' => [$isUpdate ? 'sometimes' : 'required', 'date_format:H:i'],
+        ];
+    }
+
+    private function scheduleMessages(): array
+    {
+        return [
+            '*.required'        => 'Semua informasi jadwal wajib diisi.',
+            'pegawai_id.exists' => 'Pegawai tidak valid.',
+            'tanggal.date'      => 'Tanggal tidak valid.',
+            'jam_mulai.date_format'   => 'Format jam tidak valid.',
+            'jam_selesai.date_format' => 'Format jam tidak valid.',
+        ];
+    }
+
+    private function hasScheduleConflict($pegawaiId, $tanggal, $jamMulai, $jamSelesai, $ignoreId = null): bool
+    {
+        return Jadwal::where('pegawai_id', $pegawaiId)
+            ->when($ignoreId, fn($q) => $q->where('id', '!=', $ignoreId))
+            ->whereDate('tanggal', $tanggal)
+            ->where(function ($query) use ($jamMulai, $jamSelesai) {
+                $query->whereBetween('jam_mulai', [$jamMulai, $jamSelesai])
+                    ->orWhereBetween('jam_selesai', [$jamMulai, $jamSelesai])
+                    ->orWhere(function ($sub) use ($jamMulai, $jamSelesai) {
+                        $sub->where('jam_mulai', '<=', $jamMulai)
+                            ->where('jam_selesai', '>=', $jamSelesai);
+                    });
+            })
+            ->exists();
     }
 }
