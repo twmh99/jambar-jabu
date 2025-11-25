@@ -1,0 +1,130 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body { @apply bg-gray-100 text-gray-900; }
+
+@layer components {
+  .table-playful {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+  }
+
+  .table-playful thead th {
+    @apply bg-gradient-to-r from-[#ff6a3d] to-[#e31c1c] text-white text-xs font-semibold tracking-wide uppercase;
+    padding: 0.85rem 1rem;
+    letter-spacing: 0.05em;
+  }
+
+  .table-playful thead th:first-child {
+    @apply rounded-tl-2xl;
+  }
+
+  .table-playful thead th:last-child {
+    @apply rounded-tr-2xl;
+  }
+
+  .table-playful tbody tr {
+    @apply bg-white transition hover:-translate-y-0.5 hover:shadow-sm;
+  }
+
+  .table-playful tbody tr:nth-child(even) {
+    @apply bg-rose-50/40;
+  }
+
+  .table-playful td {
+    @apply border-b border-white/60 text-sm text-gray-700;
+    padding: 0.9rem 1rem;
+  }
+
+  .table-playful td:first-child,
+  .table-playful th:first-child {
+    padding-left: 1.25rem;
+  }
+
+  .table-playful td:last-child,
+  .table-playful th:last-child {
+    padding-right: 1.25rem;
+  }
+}
+
+@layer utilities {
+  .animate-pop {
+    animation: fadeInUp 0.6s ease forwards;
+  }
+
+  .animate-floaty {
+    animation: floaty 8s ease-in-out infinite;
+  }
+
+  .animate-badge {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .animate-badge::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(
+      120deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.6) 40%,
+      transparent 80%
+    );
+    transform: translateX(-100%);
+    animation: shine 3.5s linear infinite;
+  }
+
+  .glow-panel {
+    animation: pulseBorder 4s ease-in-out infinite;
+  }
+}
+
+@keyframes fadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes floaty {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+@keyframes shine {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(200%);
+  }
+}
+
+@keyframes pulseBorder {
+  0%,
+  100% {
+    box-shadow: 0 15px 35px rgba(227, 28, 28, 0.12);
+  }
+  50% {
+    box-shadow: 0 20px 55px rgba(227, 28, 28, 0.2);
+  }
+}

@@ -1,0 +1,1 @@
+Place your login image as public/login-image.jpg
