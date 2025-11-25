@@ -54,7 +54,7 @@ sleep 2
 echo -e "${GREEN}✅ Backend aktif di: http://127.0.0.1:8000${NC}"
 
 # ===========================================
-# 3️⃣ Jalankan frontend React (Vite)
+# Jalankan frontend React (Vite)
 # ===========================================
 echo -e "${CYAN}▶️ Menjalankan frontend React (Vite)...${NC}"
 cd ../frontend || exit 1
