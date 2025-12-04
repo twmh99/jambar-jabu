@@ -12,6 +12,7 @@ import DownloadButton from "../../components/common/DownloadButton";
 import EmptyState from "../../components/common/EmptyState";
 import { toast } from "../../components/ui/toast";
 import api from "../../services/api";
+import Modal from "../../components/common/Modal";
 
 const defaultDateRange = () => {
   const today = new Date();
@@ -22,6 +23,8 @@ const defaultDateRange = () => {
     to: last.toISOString().slice(0, 10),
   };
 };
+
+const CLEAR_KEYWORDS = ["BERSIHKAN", "HAPUS", "KONFIRMASI", "BERSIHKAN RIWAYAT"];
 
 export default function PayrollReport() {
   const initialRange = defaultDateRange();
@@ -35,6 +38,67 @@ export default function PayrollReport() {
   const [summary, setSummary] = useState(null);
   const [warnings, setWarnings] = useState([]);
   const [uploadLabel, setUploadLabel] = useState("Belum ada file");
+  const [importHistory, setImportHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [clearModalOpen, setClearModalOpen] = useState(false);
+  const [clearKeyword, setClearKeyword] = useState(CLEAR_KEYWORDS[0]);
+  const [clearInput, setClearInput] = useState("");
+  const [clearingHistory, setClearingHistory] = useState(false);
+
+  // ================================================================
+  // 🔹 Riwayat Import
+  // ================================================================
+  const loadImportHistory = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await api.get("/laporan/import-transaksi/history");
+      setImportHistory(res.data?.data || []);
+    } catch (err) {
+      console.error(err);
+      toast.error("Gagal memuat riwayat import.");
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  const openClearHistoryModal = () => {
+    const randomWord =
+      CLEAR_KEYWORDS[Math.floor(Math.random() * CLEAR_KEYWORDS.length)];
+    setClearKeyword(randomWord);
+    setClearInput("");
+    setClearModalOpen(true);
+  };
+
+  const handleClearHistory = async () => {
+    const typed = clearInput.trim();
+    if (typed.toUpperCase() !== clearKeyword.toUpperCase()) {
+      toast.error("Kata konfirmasi tidak sesuai.");
+      return;
+    }
+    setClearingHistory(true);
+    try {
+      await api.delete("/laporan/import-transaksi/history", {
+        data: {
+          confirm_word: typed,
+          expected_word: clearKeyword,
+        },
+      });
+      toast.success("Riwayat import berhasil dibersihkan.");
+      setClearModalOpen(false);
+      setClearInput("");
+      loadImportHistory();
+    } catch (err) {
+      console.error(err);
+      const msg =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        "Gagal membersihkan riwayat";
+      toast.error(msg);
+    } finally {
+      setClearingHistory(false);
+    }
+  };
 
   // ================================================================
   // 🔹 LOAD PEGAWAI
@@ -48,7 +112,8 @@ export default function PayrollReport() {
         toast.error("Gagal memuat daftar pegawai");
       }
     })();
-  }, []);
+    loadImportHistory();
+  }, [loadImportHistory]);
 
   // ================================================================
   // 🔹 UPLOAD FILE TRANSAKSI
@@ -80,6 +145,7 @@ export default function PayrollReport() {
 
       if (minDate) setFrom(minDate);
       if (maxDate) setTo(maxDate);
+      loadImportHistory();
     } catch (err) {
       console.error(err);
       const msg =
@@ -138,6 +204,46 @@ export default function PayrollReport() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const parseClientDate = (value) => {
+    if (!value) return null;
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+    let normalized = value;
+    if (typeof normalized === "string" && !normalized.includes("T")) {
+      normalized = `${normalized.replace(" ", "T")}Z`;
+    }
+    const parsed = new Date(normalized);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const formatDateTime = (value) => {
+    const parsed = parseClientDate(value);
+    if (!parsed) return value || "-";
+    return parsed.toLocaleString("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const formatDateOnly = (value) => {
+    const parsed = parseClientDate(value);
+    if (!parsed) return value || "-";
+    return parsed.toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  const formatDateRange = (meta) => {
+    if (!meta || (!meta?.min_date && !meta?.max_date)) return "-";
+    const fromLabel = meta?.min_date ? formatDateOnly(meta.min_date) : "-";
+    const toLabel = meta?.max_date ? formatDateOnly(meta.max_date) : "-";
+    return `${fromLabel} s/d ${toLabel}`;
+  };
 
   // ================================================================
   // 🔹 HITUNG GRAND TOTAL
@@ -358,6 +464,104 @@ export default function PayrollReport() {
               />
             </div>
           </div>
+      </CardContent>
+    </Card>
+
+      <Card>
+        <CardHeader className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <CardTitle>Riwayat Import Transaksi</CardTitle>
+            {importHistory.length > 0 && (
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                Total data: <span className="font-semibold text-[hsl(var(--primary))]">{importHistory.length}</span>
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={loadImportHistory}
+              disabled={historyLoading}
+              className="whitespace-nowrap"
+            >
+              {historyLoading ? (
+                <>
+                  <i className="fa-solid fa-spinner animate-spin mr-2" /> Memuat...
+                </>
+              ) : (
+                <>
+                  <i className="fa-solid fa-arrows-rotate mr-2" /> Refresh
+                </>
+              )}
+            </Button>
+            {importHistory.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setHistoryExpanded((prev) => !prev)}
+                className="whitespace-nowrap"
+              >
+                {historyExpanded ? (
+                  <>
+                    <i className="fa-solid fa-down-left-and-up-right-to-center mr-2" /> Tutup Tabel
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-up-right-and-down-left-from-center mr-2" /> Perluas Tabel
+                  </>
+                )}
+              </Button>
+            )}
+            {importHistory.length > 0 && (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={openClearHistoryModal}
+                className="whitespace-nowrap flex items-center gap-2 rounded-xl bg-[#dc2626] hover:bg-[#ef4444] text-white px-4 py-2 border border-[#dc2626]"
+              >
+                <i className="fa-solid fa-broom text-white" />
+                Bersihkan Riwayat
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {importHistory.length === 0 ? (
+            <EmptyState
+              title="Belum ada riwayat."
+              subtitle="Upload file transaksi untuk melihat catatan riwayat import di sini."
+            />
+          ) : (
+            <Table
+              scrollClassName={
+                historyExpanded ? "" : "max-h-[320px] overflow-auto"
+              }
+            >
+              <THead className="sticky top-0 z-10">
+                <TR>
+                  <TH className="whitespace-nowrap text-left">Nama File</TH>
+                  <TH className="whitespace-nowrap text-center">Tanggal Upload</TH>
+                  <TH className="whitespace-nowrap text-center">Rentang Tanggal</TH>
+                  <TH className="whitespace-nowrap text-center">Diunggah Oleh</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {importHistory.map((item) => (
+                  <TR key={item.id}>
+                    <TD className="font-medium text-[hsl(var(--foreground))]">
+                      {item.file_name}
+                    </TD>
+                    <TD className="whitespace-nowrap text-center">
+                      {formatDateTime(item.imported_at || item.created_at)}
+                    </TD>
+                    <TD className="text-center">{formatDateRange(item.meta)}</TD>
+                    <TD className="text-center">{item.uploaded_by || "—"}</TD>
+                  </TR>
+                ))}
+              </TBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 
@@ -571,6 +775,68 @@ export default function PayrollReport() {
           )}
         </>
       )}
+
+      <Modal
+        open={clearModalOpen}
+        title="Bersihkan Riwayat Import"
+        onClose={() => {
+          if (!clearingHistory) {
+            setClearModalOpen(false);
+            setClearInput("");
+          }
+        }}
+      >
+        <div className="space-y-4 text-sm">
+          <p className="text-[hsl(var(--muted-foreground))] leading-relaxed">
+            Tindakan ini akan menghapus seluruh riwayat import transaksi. Ketik{" "}
+            <span className="font-semibold text-[hsl(var(--primary))]">
+              {clearKeyword}
+            </span>{" "}
+            untuk melanjutkan.
+          </p>
+          <Input
+            value={clearInput}
+            onChange={(e) => setClearInput(e.target.value)}
+            placeholder={clearKeyword}
+            disabled={clearingHistory}
+            autoFocus
+          />
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (!clearingHistory) {
+                  setClearModalOpen(false);
+                  setClearInput("");
+                }
+              }}
+              disabled={clearingHistory}
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleClearHistory}
+              disabled={clearingHistory}
+              className="flex items-center gap-2 rounded-xl bg-[#dc2626] hover:bg-[#ef4444] text-white px-4 py-2 border border-[#dc2626]"
+            >
+              {clearingHistory ? (
+                <>
+                  <i className="fa-solid fa-spinner animate-spin" />
+                  Menghapus...
+                </>
+              ) : (
+                <>
+                  <i className="fa-solid fa-broom" />
+                  Bersihkan
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -49,7 +49,7 @@
   color: hsl(var(--foreground));
   border-radius: 1.25rem;
   border: 1.5px solid hsl(var(--border));
-  transition: all 0.35s ease;
+  transition: box-shadow 0.25s ease, border-color 0.25s ease;
   width: 100%;
   display: flex;
   flex-direction: column;
@@ -438,7 +438,6 @@ button:disabled i.fa-trash {
 .btn-edit:hover {
   background-color: #fef4c2;
   color: #b45309;
-  transform: translateY(-1px);
 }
 
 .btn-edit:hover i {
@@ -468,6 +467,8 @@ button i.fa-pen {
 /* ========================================
    🗑️ Delete Button (merah)
 ======================================== */
+
+
 .btn-delete {
   @apply inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-xl border transition-all duration-200;
   border-color: rgba(15, 23, 42, 0.25);
@@ -484,7 +485,6 @@ button i.fa-pen {
   background-color: #fee2e2;
   border-color: rgba(15, 23, 42, 0.25);
   color: #dc2626;
-  transform: translateY(-1px);
 }
 
 .btn-delete:hover i {
@@ -537,7 +537,6 @@ button i.fa-pen {
 .btn-primary:hover {
   background: linear-gradient(135deg, #2563eb, #1d4ed8);
   box-shadow: 0 3px 10px rgba(37, 99, 235, 0.35);
-  transform: translateY(-1px);
 }
 
 .dark .btn-primary {
@@ -580,7 +579,6 @@ button i.fa-pen {
 .btn-success:hover {
   background: linear-gradient(135deg, #16a34a, #15803d);
   box-shadow: 0 3px 10px rgba(22, 163, 74, 0.35);
-  transform: translateY(-1px);
 }
 
 /* Tombol netral abu-abu (misalnya: “Tutup”, “Lewati”) */

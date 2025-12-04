@@ -7,6 +7,7 @@ use App\Models\Absensi;
 use App\Models\Gaji;
 use App\Models\Jadwal;
 use App\Models\Transaction;
+use App\Models\TransactionImportLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -26,12 +27,29 @@ class ReportController extends Controller
 
         try {
             $importer = new TransaksiImport();
-            Excel::import($importer, $request->file('file'));
+            $file = $request->file('file');
+            Excel::import($importer, $file);
+
+            $log = TransactionImportLog::create([
+                'user_id'     => $request->user()->id ?? null,
+                'file_name'   => $file->getClientOriginalName(),
+                'imported_at' => now(),
+                'meta'        => [
+                    'size'     => $file->getSize(),
+                    'min_date' => $importer->getMinDate(),
+                    'max_date' => $importer->getMaxDate(),
+                ],
+            ]);
 
             return response()->json([
                 'message'  => 'Data transaksi berhasil diimport!',
                 'min_date' => $importer->getMinDate(),
                 'max_date' => $importer->getMaxDate(),
+                'file'     => [
+                    'name'        => $log->file_name,
+                    'imported_at' => $log->imported_at?->toDateTimeString(),
+                    'log_id'      => $log->id,
+                ],
             ], 200);
         } catch (\InvalidArgumentException $e) {
             return response()->json([
@@ -43,6 +61,62 @@ class ReportController extends Controller
                 'error'   => $e->getMessage()
             ], 500);
         }
+    }
+
+    public function importHistory(Request $request)
+    {
+        $limit = min(max((int) $request->get('limit', 50), 1), 200);
+        $query = TransactionImportLog::with('user:id,name,email');
+
+        if ($request->filled('from')) {
+            $query->whereDate('imported_at', '>=', $request->get('from'));
+        }
+        if ($request->filled('to')) {
+            $query->whereDate('imported_at', '<=', $request->get('to'));
+        }
+
+        $logs = $query
+            ->orderByDesc('imported_at')
+            ->orderByDesc('id')
+            ->limit($limit)
+            ->get()
+            ->map(function (TransactionImportLog $log) {
+                return [
+                    'id'           => $log->id,
+                    'file_name'    => $log->file_name,
+                    'imported_at'  => $log->imported_at?->toDateTimeString(),
+                    'uploaded_by'  => $log->user?->name,
+                    'uploader_id'  => $log->user_id,
+                    'meta'         => $log->meta,
+                    'created_at'   => $log->created_at?->toDateTimeString(),
+                ];
+            });
+
+        return response()->json(['data' => $logs], 200);
+    }
+
+    public function clearImportHistory(Request $request)
+    {
+        $validated = $request->validate([
+            'confirm_word'  => 'required|string',
+            'expected_word' => 'required|string',
+        ]);
+
+        $allowedKeywords = ['BERSIHKAN', 'HAPUS', 'KONFIRMASI', 'BERSIHKAN RIWAYAT'];
+        $expectedWord = strtoupper(trim($validated['expected_word']));
+        $confirmWord = strtoupper(trim($validated['confirm_word']));
+
+        if (!in_array($expectedWord, $allowedKeywords, true) || $confirmWord !== $expectedWord) {
+            return response()->json([
+                'message' => 'Kata konfirmasi tidak sesuai.',
+            ], 422);
+        }
+
+        TransactionImportLog::truncate();
+
+        return response()->json([
+            'message' => 'Riwayat import transaksi berhasil dibersihkan.',
+        ], 200);
     }
 
     /** Ringkasan Dashboard Owner */

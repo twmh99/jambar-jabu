@@ -26,6 +26,7 @@ export default function AttendanceReport() {
   const [rows, setRows] = React.useState([]);
   const [emps, setEmps] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
+  const [listExpanded, setListExpanded] = React.useState(false);
 
   React.useEffect(() => {
     (async () => {
@@ -176,42 +177,53 @@ export default function AttendanceReport() {
       </Card>
 
       <Card>
-        <CardHeader className="flex items-center justify-between">
-          <CardTitle>Hasil</CardTitle>
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            Total data: <span className="font-semibold text-[hsl(var(--primary))]">{rows.length}</span>
-          </p>
+        <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-1">
+            <CardTitle>Hasil</CardTitle>
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">
+              Total data: <span className="font-semibold text-[hsl(var(--primary))]">{rows.length}</span>
+            </p>
+          </div>
+          {rows.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setListExpanded((prev) => !prev)}
+              className="flex items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-white px-4 py-2 text-sm font-medium text-[hsl(var(--foreground))] shadow-sm whitespace-nowrap"
+            >
+              <i className="fa-solid fa-up-right-and-down-left-from-center" />
+              <span>{listExpanded ? "Tutup Tabel" : "Perluas Tabel"}</span>
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {rows.length === 0 ? (
             <EmptyState title="Belum ada data absensi pada rentang tanggal ini" />
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <THead>
-                  <TR>
-                    <TH>Tanggal</TH>
-                    <TH>Pegawai</TH>
-                    <TH>Masuk</TH>
-                    <TH>Pulang</TH>
-                    <TH>Status</TH>
-                    <TH>Tip (Rp)</TH>
+            <Table scrollClassName={listExpanded ? "" : "max-h-[420px] overflow-auto"}>
+              <THead className="sticky top-0 z-10">
+                <TR>
+                  <TH>Tanggal</TH>
+                  <TH>Pegawai</TH>
+                  <TH>Masuk</TH>
+                  <TH>Pulang</TH>
+                  <TH>Status</TH>
+                  <TH>Tip (Rp)</TH>
+                </TR>
+              </THead>
+              <TBody>
+                {rows.map((r, i) => (
+                  <TR key={i}>
+                    <TD>{r.tanggal}</TD>
+                    <TD>{r.pegawai}</TD>
+                    <TD>{r.check_in}</TD>
+                    <TD>{r.check_out}</TD>
+                    <TD>{r.status}</TD>
+                    <TD>{new Intl.NumberFormat("id-ID").format(r.tips)}</TD>
                   </TR>
-                </THead>
-                <TBody>
-                  {rows.map((r, i) => (
-                    <TR key={i}>
-                      <TD>{r.tanggal}</TD>
-                      <TD>{r.pegawai}</TD>
-                      <TD>{r.check_in}</TD>
-                      <TD>{r.check_out}</TD>
-                      <TD>{r.status}</TD>
-                      <TD>{new Intl.NumberFormat("id-ID").format(r.tips)}</TD>
-                    </TR>
-                  ))}
-                </TBody>
-              </Table>
-            </div>
+                ))}
+              </TBody>
+            </Table>
           )}
         </CardContent>
       </Card>

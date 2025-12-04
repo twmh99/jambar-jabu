@@ -240,19 +240,22 @@ export default function EmployeesBase({ role }) {
   };
 
   // ===== DELETE =====
-  const confirmRemove = (rowIdx) => {
-    setDeleteTarget(rowIdx);
+  const confirmRemove = (pegawai) => {
+    if (!pegawai) return;
+    setDeleteTarget({ id: pegawai.id, nama: pegawai.nama });
     setShowDelete(true);
   };
 
   const handleDeleteConfirm = async () => {
-    const idx = deleteTarget;
-    if (idx == null) return;
+    if (!deleteTarget?.id) return;
+    const targetId = deleteTarget.id;
+    const targetName = deleteTarget.nama || 'Pegawai';
     try {
-      await api.delete(`/pegawai/${rows[idx].id}`);
-      toast.info(`Pegawai "${rows[idx].nama}" berhasil dihapus.`);
+      await api.delete(`/pegawai/${targetId}`);
+      toast.info(`Pegawai "${targetName}" berhasil dihapus.`);
       setShowDelete(false);
-      setRows((prev) => prev.filter((_, i) => i !== idx));
+      setDeleteTarget(null);
+      setRows((prev) => prev.filter((row) => String(row.id) !== String(targetId)));
     } catch (err) {
       toast.error('Gagal menghapus data pegawai.');
     }
@@ -314,10 +317,13 @@ export default function EmployeesBase({ role }) {
     <div className="space-y-6">
       <ConfirmDeleteModal
         open={showDelete}
-        onCancel={() => setShowDelete(false)}
+        onCancel={() => {
+          setShowDelete(false);
+          setDeleteTarget(null);
+        }}
         onConfirm={handleDeleteConfirm}
         entityLabel="data pegawai"
-        targetName={rows[deleteTarget]?.nama}
+        targetName={deleteTarget?.nama}
       />
 
       <Card>
@@ -439,7 +445,7 @@ export default function EmployeesBase({ role }) {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          confirmRemove(filtered.indexOf(r));
+                          confirmRemove(r);
                         }}
                         className="btn-delete"
                         title="Hapus Pegawai"

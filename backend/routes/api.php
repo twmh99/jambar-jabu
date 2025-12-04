@@ -29,6 +29,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/owner-summary', [ReportController::class, 'ownerSummary']);
         Route::get('/analisis', [ReportController::class, 'analisisKinerja']);
         Route::post('/import-transaksi', [ReportController::class, 'importTransaksi']); // FIX
+        Route::get('/import-transaksi/history', [ReportController::class, 'importHistory']);
+        Route::delete('/import-transaksi/history', [ReportController::class, 'clearImportHistory']);
         Route::get('/payroll', [ReportController::class, 'payrollReport']);
         Route::get('/absensi', [ReportController::class, 'attendanceRaw']);
     });

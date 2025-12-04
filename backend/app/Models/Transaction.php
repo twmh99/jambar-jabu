@@ -20,10 +20,12 @@ class Transaction extends Model
         'harga',
         'total',
         'shift',
+        'customer_name',
         'jam',          // durasi jam kerja (jika diisi)
         'jam_mulai',
         'jam_selesai',
         'tanggal',
+        'payment_method',
     ];
 
     public function pegawai()

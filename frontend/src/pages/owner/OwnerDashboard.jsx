@@ -150,11 +150,20 @@ export default function OwnerDashboard() {
         Array.isArray(summaryData.komposisi_shift) &&
         summaryData.komposisi_shift.length
       ) {
-        computedShift = summaryData.komposisi_shift.map((value, idx) => ({
-          label: `Shift ${idx + 1}`,
-          value,
-        }));
+        computedShift = summaryData.komposisi_shift.map((item, idx) => {
+          const isObject = item && typeof item === "object";
+          const label = isObject
+            ? item.shift || item.label || `Shift ${idx + 1}`
+            : `Shift ${idx + 1}`;
+          const valueRaw = isObject ? item.jumlah ?? item.value ?? 0 : item;
+          return {
+            label,
+            value: Number(valueRaw) || 0,
+          };
+        });
       }
+
+      computedShift = computedShift.filter((entry) => entry.value > 0);
 
       setSummary(summaryData);
       setEmployees(employeeList);
@@ -482,9 +491,9 @@ export default function OwnerDashboard() {
           <Table>
             <THead>
               <TR>
-                <TH className="text-[hsl(var(--foreground))]">ID</TH>
                 <TH className="text-[hsl(var(--foreground))]">Nama</TH>
                 <TH className="text-[hsl(var(--foreground))]">Jabatan</TH>
+                <TH className="text-[hsl(var(--foreground))]">Telepon</TH>
                 <TH className="text-[hsl(var(--foreground))]">Status</TH>
               </TR>
             </THead>
@@ -496,9 +505,9 @@ export default function OwnerDashboard() {
                     onClick={() => showDetail(e)}
                     className="hover:bg-[hsl(var(--muted))]/20 cursor-pointer transition-all"
                   >
-                    <TD className="font-mono text-xs text-[hsl(var(--muted-foreground))]">{e.id}</TD>
                     <TD className="text-[hsl(var(--foreground))]">{e.nama}</TD>
                     <TD className="text-[hsl(var(--foreground))]">{e.jabatan}</TD>
+                    <TD className="text-[hsl(var(--foreground))]">{e.telepon || "-"}</TD>
                     <TD>
                       <span
                         className={

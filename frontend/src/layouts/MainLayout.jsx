@@ -273,12 +273,19 @@ export default function MainLayout() {
             ].join(" ")}
           >
             <nav
-              className={`rounded-3xl p-4 shadow-xl border space-y-1 backdrop-blur-xl transition-all duration-700 max-h-[70vh] lg:max-h-none overflow-y-auto ${
+              className={`ds-card p-5 space-y-3 transition-all duration-500 max-h-[70vh] lg:max-h-none overflow-y-auto overflow-x-hidden ${
                 activeTheme === "dark"
-                  ? "bg-[#1e293b]/70 border-gray-700"
-                  : "bg-white/70 border-gray-200"
+                  ? "bg-[#0d1728]/85 border-[#1b2a40]"
+                  : "bg-gradient-to-b from-white via-[#f7fbff] to-[#eef5ff] border-white"
               }`}
             >
+              <p
+                className={`text-sm font-semibold mb-1 pl-1 transition-colors ${
+                  activeTheme === "dark" ? "text-gray-100/80" : "text-[#1f2a37]"
+                }`}
+              >
+                Menu Utama
+              </p>
               {items.map((it) => (
                 <NavLink
                   key={it.to}
@@ -286,18 +293,36 @@ export default function MainLayout() {
                   onClick={handleNavClick(it, true)}
                   className={({ isActive }) =>
                     [
-                      "flex items-center gap-3 px-4 py-2.5 rounded-2xl text-[15px] font-medium transition-all duration-300 relative",
-                      navAlert === it.to ? "after:absolute after:-top-1 after:-right-1 after:w-3 after:h-3 after:rounded-full after:bg-primary" : "",
+                      "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[13px] font-medium transition-[background,color,border] duration-300 ease-out relative border group",
+                      navAlert === it.to
+                        ? "after:absolute after:-top-1 after:-right-1 after:w-3 after:h-3 after:rounded-full after:bg-[hsl(var(--primary))] after:ring-2 after:ring-white"
+                        : "",
                       isActive
-                        ? "bg-gradient-to-r from-[#38bdf8] to-[#06b6d4] text-white shadow-[0_0_12px_rgba(56,189,248,0.5)] scale-[1.03]"
+                        ? activeTheme === "dark"
+                          ? "bg-[#132848] text-white border-transparent"
+                          : "bg-[hsl(var(--primary))] text-white border-transparent"
                         : activeTheme === "dark"
-                        ? "text-gray-300 hover:bg-[#334155]/70 hover:text-[#38bdf8]"
-                        : "text-gray-700 hover:bg-[#e0f2fe]/80 hover:text-[#0369a1]",
-                    ].join(" ")
-                  }
-                >
-                  <i className={it.icon + " text-[16px]"} />
-                  <span>{it.label}</span>
+                        ? "text-gray-200 border-transparent bg-transparent hover:bg-white/15 hover:text-white"
+                        : "text-[#1f2a37] border-transparent bg-transparent hover:bg-[#dff3ff] hover:text-[hsl(var(--primary))]"
+                ].join(" ")
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <span
+                    className={`flex items-center justify-center w-8 h-8 rounded-lg text-[13px] transition-[background,color,border] duration-300 ease-out border ${
+                      isActive
+                        ? "bg-white/15 text-white border-transparent"
+                        : activeTheme === "dark"
+                        ? "bg-white/5 text-[#89d0ff] border-white/10 group-hover:bg-white/15 group-hover:border-white/20"
+                        : "bg-[#f4f8fe] text-[hsl(var(--primary))] border-[#d9e8ff] group-hover:bg-[#dff3ff] group-hover:border-[#c3dcff]"
+                    }`}
+                  >
+                    <i className={it.icon} />
+                  </span>
+                      <span className="whitespace-nowrap">{it.label}</span>
+                    </>
+                  )}
                 </NavLink>
               ))}
             </nav>

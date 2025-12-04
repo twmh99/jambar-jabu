@@ -78,6 +78,21 @@ export const Pie = ({
         className="max-w-full h-auto"
       >
         {segments.map((seg, i) => {
+          const sliceAngle = seg.end - seg.start;
+          if (sliceAngle >= 359.99) {
+            return (
+              <circle
+                key={i}
+                cx={radius}
+                cy={radius}
+                r={radius}
+                fill={seg.color}
+                opacity={hover?.label === seg.label ? 1 : 0.9}
+                onMouseEnter={() => setHover({ label: seg.label, value: seg.value })}
+                onMouseLeave={() => setHover(null)}
+              />
+            );
+          }
           const path = describeArc(radius, radius, radius, seg.start, seg.end);
           return (
             <path
@@ -124,18 +139,26 @@ export const Pie = ({
       </svg>
 
       <div className="space-y-2.5 w-full flex flex-col justify-center items-start">
-        {values.map((v, i) => (
-          <div key={i} className="flex items-start gap-2.5 text-sm">
+        {segments.map((seg, i) => (
+          <div
+            key={`${seg.label}-${i}`}
+            className="flex items-start gap-2.5 text-sm"
+            onMouseEnter={() => setHover({ label: seg.label, value: seg.value })}
+            onMouseLeave={() => setHover(null)}
+          >
             <div
               className="mt-1 w-2.5 h-2.5 rounded-full border"
-              style={{ background: colors[i], borderColor: colors[i] || "hsl(var(--border))" }}
+              style={{
+                background: seg.color,
+                borderColor: seg.color || "hsl(var(--border))",
+              }}
             />
             <div className="flex flex-col leading-tight">
               <span className="text-[13px] font-semibold text-[hsl(var(--foreground))] leading-snug">
-                {labels[i] || `Shift ${i + 1}`}
+                {seg.label || `Shift ${i + 1}`}
               </span>
               <span className="text-[12px] text-[hsl(var(--muted-foreground))] leading-snug">
-                Jumlah: {v} | {Math.round((v / total) * 100)}%
+                Jumlah: {seg.value} | {Math.round(seg.frac * 100)}%
               </span>
             </div>
           </div>

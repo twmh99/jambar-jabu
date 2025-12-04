@@ -44,7 +44,15 @@ if [ ! -f ".env" ]; then
   cp .env.example .env
 fi
 
-php artisan key:generate --force
+echo -e "${CYAN}🧹 Membersihkan cache konfigurasi Laravel...${NC}"
+php artisan config:clear >/dev/null 2>&1 || true
+
+if grep -Eq "^APP_KEY=[[:space:]]*$" .env; then
+  php artisan key:generate --force
+else
+  echo "🔑 APP_KEY sudah tersedia, lewati key:generate."
+fi
+
 php artisan migrate --force
 
 php artisan serve --host=127.0.0.1 --port=8000 > ../backend.log 2>&1 &
