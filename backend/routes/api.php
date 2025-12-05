@@ -7,6 +7,7 @@ use App\Http\Controllers\JadwalController;
 use App\Http\Controllers\AbsensiController;
 use App\Http\Controllers\GajiController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\OwnerSettingController;
 // HAPUS: use App\Http\Controllers\DashboardController;
 
 /* ===== AUTH (public) ===== */
@@ -33,7 +34,16 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/import-transaksi/history', [ReportController::class, 'clearImportHistory']);
         Route::get('/payroll', [ReportController::class, 'payrollReport']);
         Route::get('/absensi', [ReportController::class, 'attendanceRaw']);
+        Route::get('/absensi/export/pdf', [ReportController::class, 'attendanceReportPdf']);
+        Route::get('/absensi/export/csv', [ReportController::class, 'attendanceReportCsv']);
     });
+
+    Route::prefix('owner')->group(function () {
+        Route::get('/settings', [OwnerSettingController::class, 'show']);
+        Route::put('/settings', [OwnerSettingController::class, 'update']);
+    });
+
+    Route::get('/settings/attendance', [OwnerSettingController::class, 'attendanceSettings']);
 
     /* Jadwal */
     Route::get('/jadwal/today', [JadwalController::class, 'today']);

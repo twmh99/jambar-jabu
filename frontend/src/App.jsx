@@ -19,6 +19,7 @@ import Employees from "./pages/owner/Employees";
 import Analytics from "./pages/owner/Analytics";
 import AttendanceReport from "./pages/owner/AttendanceReport";
 import PayrollReport from "./pages/owner/PayrollReport";
+import AttendanceSettings from "./pages/owner/AttendanceSettings";
 
 // ==== Supervisor Pages ====
 import SupervisorDashboard from "./pages/supervisor/SupervisorDashboard";
@@ -62,6 +63,7 @@ export default function App() {
           <Route path="analytics" element={<Analytics />} />
           <Route path="attendance" element={<AttendanceReport />} />
           <Route path="payroll" element={<PayrollReport />} />
+          <Route path="settings" element={<AttendanceSettings />} />
         </Route>
 
         {/* ==== SUPERVISOR ==== */}

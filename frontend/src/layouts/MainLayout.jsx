@@ -6,7 +6,7 @@ import api from "../services/api";
 import logoAurora from "/home/willy/smpj/frontend/assets/Logo Jambar Jabu.jpg";
 
 /* ======================================================
-   🧭 Navigasi Berdasarkan Role
+   Navigasi Berdasarkan Role
    ====================================================== */
 const navByRole = {
   owner: [
@@ -16,6 +16,7 @@ const navByRole = {
     { to: "/owner/attendance", label: "Laporan Absensi", icon: "fa-solid fa-calendar-check" },
     { to: "/owner/payroll", label: "Laporan Gaji & Tip", icon: "fa-solid fa-money-bill-wave" },
     { to: "/owner/analytics", label: "Analisis Kinerja", icon: "fa-solid fa-chart-line" },
+    { to: "/owner/settings", label: "Pengaturan Absensi", icon: "fa-solid fa-sliders" },
   ],
   supervisor: [
     { to: "/supervisor/dashboard", label: "Dashboard", icon: "fa-solid fa-gauge" },
@@ -35,7 +36,7 @@ const navByRole = {
 };
 
 /* ======================================================
-   Layout adaptif terang/gelap + Aurora dinamis
+   Layout adaptif terang/gelap
    ====================================================== */
 export default function MainLayout() {
   const navigate = useNavigate();
@@ -273,14 +274,14 @@ export default function MainLayout() {
             ].join(" ")}
           >
             <nav
-              className={`ds-card p-5 space-y-3 transition-all duration-500 max-h-[70vh] lg:max-h-none overflow-y-auto overflow-x-hidden ${
+              className={`rounded-[24px] p-5 space-y-3 shadow-2xl hover:shadow-[0_20px_45px_rgba(15,23,42,0.2)] border transition-all duration-500 max-h-[70vh] lg:max-h-none overflow-y-auto overflow-x-hidden ${
                 activeTheme === "dark"
-                  ? "bg-[#0d1728]/85 border-[#1b2a40]"
-                  : "bg-gradient-to-b from-white via-[#f7fbff] to-[#eef5ff] border-white"
+                  ? "bg-[#111a2b] border-gray-700"
+                  : "bg-white border-gray-200"
               }`}
             >
               <p
-                className={`text-sm font-semibold mb-1 pl-1 transition-colors ${
+                className={`text-sm font-semibold mb-1 pl-1 ${
                   activeTheme === "dark" ? "text-gray-100/80" : "text-[#1f2a37]"
                 }`}
               >
@@ -303,23 +304,23 @@ export default function MainLayout() {
                           : "bg-[hsl(var(--primary))] text-white border-transparent"
                         : activeTheme === "dark"
                         ? "text-gray-200 border-transparent bg-transparent hover:bg-white/15 hover:text-white"
-                        : "text-[#1f2a37] border-transparent bg-transparent hover:bg-[#dff3ff] hover:text-[hsl(var(--primary))]"
-                ].join(" ")
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <span
-                    className={`flex items-center justify-center w-8 h-8 rounded-lg text-[13px] transition-[background,color,border] duration-300 ease-out border ${
-                      isActive
-                        ? "bg-white/15 text-white border-transparent"
-                        : activeTheme === "dark"
-                        ? "bg-white/5 text-[#89d0ff] border-white/10 group-hover:bg-white/15 group-hover:border-white/20"
-                        : "bg-[#f4f8fe] text-[hsl(var(--primary))] border-[#d9e8ff] group-hover:bg-[#dff3ff] group-hover:border-[#c3dcff]"
-                    }`}
-                  >
-                    <i className={it.icon} />
-                  </span>
+                        : "text-[#1f2a37] border-transparent bg-transparent hover:bg-[#dff3ff] hover:text-[hsl(var(--primary))]",
+                    ].join(" ")
+                  }
+                >
+                  {({ isActive }) => (
+                    <>
+                      <span
+                        className={`flex items-center justify-center w-8 h-8 rounded-lg text-[13px] transition-[background,color,border] duration-300 ease-out border ${
+                          isActive
+                            ? "bg-white/15 text-white border-transparent"
+                            : activeTheme === "dark"
+                            ? "bg-white/5 text-[#89d0ff] border-white/10 group-hover:bg-white/15 group-hover:border-white/20"
+                            : "bg-[#f4f8fe] text-[hsl(var(--primary))] border-[#d9e8ff] group-hover:bg-[#dff3ff] group-hover:border-[#c3dcff]"
+                        }`}
+                      >
+                        <i className={it.icon} />
+                      </span>
                       <span className="whitespace-nowrap">{it.label}</span>
                     </>
                   )}

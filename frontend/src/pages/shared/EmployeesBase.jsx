@@ -593,7 +593,7 @@ export default function EmployeesBase({ role }) {
         onClose={() => setDetailOpen(false)}
       >
         {selectedPegawai ? (
-          <div className="max-h-[70vh] overflow-y-auto space-y-6 text-[15px]">
+          <div className="space-y-6 text-[15px]">
             <div className="flex flex-col items-center gap-1 text-center">
               <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#38bdf8] to-[#0ea5e9] flex items-center justify-center text-white text-3xl font-semibold shadow-lg">
                 {selectedPegawai.nama?.charAt(0)?.toUpperCase() || '?'}

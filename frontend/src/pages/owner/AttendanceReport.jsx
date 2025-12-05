@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Table, TBody, THead, TH, TR, TD } from "../../components/ui/table";
 import { Input, Label, Select } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
-import DownloadButton from "../../components/common/DownloadButton";
 import EmptyState from "../../components/common/EmptyState";
 import { toast } from "../../components/ui/toast";
 import api from "../../services/api";
@@ -27,6 +26,8 @@ export default function AttendanceReport() {
   const [emps, setEmps] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [listExpanded, setListExpanded] = React.useState(false);
+  const [exportingPdf, setExportingPdf] = React.useState(false);
+  const [exportingCsv, setExportingCsv] = React.useState(false);
 
   React.useEffect(() => {
     (async () => {
@@ -78,60 +79,60 @@ export default function AttendanceReport() {
     }
   }, [emp, emps, from, to]);
 
+  const buildParams = React.useCallback(() => {
+    const params = {};
+    if (from) params.from = from;
+    if (to) params.to = to;
+    if (emp) params.pegawai_id = emp;
+    return params;
+  }, [from, to, emp]);
+
+  const triggerDownload = React.useCallback((data, headers, fallbackName, mime) => {
+    const blob = new Blob([data], { type: mime });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const disposition = headers?.["content-disposition"] || headers?.["Content-Disposition"];
+    let filename = fallbackName;
+    if (disposition) {
+      const match = disposition.match(/filename=\"?([^\";]+)\"?/i);
+      if (match?.[1]) {
+        filename = match[1];
+      }
+    }
+    link.href = url;
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  }, []);
+
+  const exportReport = React.useCallback(
+    async (format) => {
+      const setFlag = format === "pdf" ? setExportingPdf : setExportingCsv;
+      setFlag(true);
+      try {
+        const endpoint = format === "pdf" ? "/laporan/absensi/export/pdf" : "/laporan/absensi/export/csv";
+        const response = await api.get(endpoint, {
+          params: buildParams(),
+          responseType: "blob",
+        });
+        const mime = format === "pdf" ? "application/pdf" : "text/csv;charset=utf-8;";
+        const fallback = `laporan-absensi.${format}`;
+        triggerDownload(response.data, response.headers, fallback, mime);
+      } catch (error) {
+        console.error(error);
+        toast.error(`Gagal mengunduh laporan ${format.toUpperCase()}`);
+      } finally {
+        setFlag(false);
+      }
+    },
+    [buildParams, triggerDownload]
+  );
+
   React.useEffect(() => {
     load();
   }, [load]);
-
-  const exportPDF = () => {
-    if (!rows.length) {
-      toast.info("Tidak ada data untuk diekspor");
-      return;
-    }
-    const win = window.open("", "_blank");
-    if (!win) {
-      toast.error("Pop-up diblokir, izinkan pop-up untuk melanjutkan");
-      return;
-    }
-    const rowsHtml = rows
-      .map(
-        (r) =>
-          `<tr><td>${r.tanggal}</td><td>${r.pegawai}</td><td>${r.check_in}</td><td>${r.check_out}</td><td>${r.status}</td><td>${r.tips}</td></tr>`
-      )
-      .join("");
-    win.document.write(`
-      <html>
-        <head>
-          <title>Laporan Absensi</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 20px; }
-            h1 { font-size: 18px; margin-bottom: 12px; }
-            table { width: 100%; border-collapse: collapse; }
-            th, td { border: 1px solid #d1d5db; padding: 8px; font-size: 12px; text-align: left; }
-            th { background: #f3f4f6; }
-          </style>
-        </head>
-        <body>
-          <h1>Laporan Absensi ${from} s.d. ${to}</h1>
-          <table>
-            <thead>
-              <tr>
-                <th>Tanggal</th>
-                <th>Pegawai</th>
-                <th>Masuk</th>
-                <th>Pulang</th>
-                <th>Status</th>
-                <th>Tip</th>
-              </tr>
-            </thead>
-            <tbody>${rowsHtml}</tbody>
-          </table>
-        </body>
-      </html>
-    `);
-    win.document.close();
-    win.focus();
-    win.print();
-  };
 
   return (
     <div className="space-y-6">
@@ -165,9 +166,30 @@ export default function AttendanceReport() {
             </Button>
             {rows.length > 0 && (
               <>
-                <DownloadButton filename={`absensi_${from}_sampai_${to}.csv`} rows={rows} />
-                <Button type="button" onClick={exportPDF} className="ds-btn ds-btn-primary">
-                  <i className="fa-solid fa-file-pdf mr-2" />
+                <Button
+                  type="button"
+                  onClick={() => exportReport("csv")}
+                  disabled={exportingCsv}
+                  className="ds-btn ds-btn-outline flex items-center gap-2"
+                >
+                  {exportingCsv ? (
+                    <i className="fa-solid fa-spinner animate-spin mr-2" />
+                  ) : (
+                    <i className="fa-solid fa-file-csv mr-2" />
+                  )}
+                  Ekspor CSV
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => exportReport("pdf")}
+                  disabled={exportingPdf}
+                  className="ds-btn ds-btn-primary flex items-center gap-2"
+                >
+                  {exportingPdf ? (
+                    <i className="fa-solid fa-spinner animate-spin mr-2" />
+                  ) : (
+                    <i className="fa-solid fa-file-pdf mr-2" />
+                  )}
                   Ekspor PDF
                 </Button>
               </>

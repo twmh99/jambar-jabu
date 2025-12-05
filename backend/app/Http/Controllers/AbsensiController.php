@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Absensi;
 use App\Models\Jadwal;
+use App\Models\Setting;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -84,11 +86,34 @@ class AbsensiController extends Controller
     /** Check-in */
     public function checkin(Request $request)
     {
+        $settings = $this->attendanceSettings();
+
         $data = $request->validate([
             'pegawai_id' => 'required|exists:pegawai,id',
+            'latitude'   => 'nullable|numeric|between:-90,90',
+            'longitude'  => 'nullable|numeric|between:-180,180',
         ]);
 
         $today = Carbon::today()->toDateString();
+        $now = Carbon::now();
+
+        $jadwal = Jadwal::where('pegawai_id', $data['pegawai_id'])
+            ->whereDate('tanggal', $today)
+            ->first();
+
+        if ($settings['requires_geofence']) {
+            if (!isset($data['latitude'], $data['longitude'])) {
+                return response()->json(['message' => 'Koordinat wajib dikirim untuk check-in.'], 422);
+            }
+            $distance = $this->distanceInMeters($data['latitude'], $data['longitude'], $settings['latitude'], $settings['longitude']);
+            if ($distance > $settings['radius_m']) {
+                return response()->json([
+                    'message' => sprintf('Check-in ditolak. Anda berada %d m dari lokasi kantor.', round($distance)),
+                ], 422);
+            }
+        }
+
+        [$start, $end] = $this->ensureWithinWindow($jadwal, $settings, $now, 'checkin');
 
         $row = Absensi::firstOrCreate(
             ['pegawai_id' => $data['pegawai_id'], 'tanggal' => $today],
@@ -96,10 +121,15 @@ class AbsensiController extends Controller
         );
 
         if (!$row->jam_masuk) {
-            $now = Carbon::now()->format('H:i:s');
-            $row->jam_masuk = $now;
-            // status default: Hadir atau Terlambat berdasarkan jam 09:00
-            $row->status = ($now > '09:00:00') ? 'Terlambat' : 'Hadir';
+            $row->jam_masuk = $now->format('H:i:s');
+            if ($start && $now->greaterThan($start)) {
+                $row->status = 'Terlambat';
+            } else {
+                $row->status = 'Hadir';
+            }
+            if ($jadwal && !$row->shift) {
+                $row->shift = $jadwal->shift;
+            }
             $row->save();
         }
 
@@ -109,19 +139,42 @@ class AbsensiController extends Controller
     /** Check-out */
     public function checkout(Request $request)
     {
+        $settings = $this->attendanceSettings();
+
         $data = $request->validate([
             'pegawai_id' => 'required|exists:pegawai,id',
             'tip'        => 'nullable|numeric|min:0',
+            'latitude'   => 'nullable|numeric|between:-90,90',
+            'longitude'  => 'nullable|numeric|between:-180,180',
         ]);
 
         $today = Carbon::today()->toDateString();
+        $now = Carbon::now();
+
+        $jadwal = Jadwal::where('pegawai_id', $data['pegawai_id'])
+            ->whereDate('tanggal', $today)
+            ->first();
+
+        if ($settings['requires_geofence']) {
+            if (!isset($data['latitude'], $data['longitude'])) {
+                return response()->json(['message' => 'Koordinat wajib dikirim untuk check-out.'], 422);
+            }
+            $distance = $this->distanceInMeters($data['latitude'], $data['longitude'], $settings['latitude'], $settings['longitude']);
+            if ($distance > $settings['radius_m']) {
+                return response()->json([
+                    'message' => sprintf('Check-out ditolak. Anda berada %d m dari lokasi kantor.', round($distance)),
+                ], 422);
+            }
+        }
+
+        [$start, $end] = $this->ensureWithinWindow($jadwal, $settings, $now, 'checkout');
 
         $row = Absensi::firstOrCreate(
             ['pegawai_id' => $data['pegawai_id'], 'tanggal' => $today],
             []
         );
 
-        $row->jam_keluar = Carbon::now()->format('H:i:s');
+        $row->jam_keluar = $now->format('H:i:s');
         if (isset($data['tip'])) {
             $row->tip = (float) $data['tip'];
         }
@@ -254,5 +307,129 @@ class AbsensiController extends Controller
             ]);
 
         return response()->json($items->values());
+    }
+
+    /* ===================== Utilitas Pengaturan ===================== */
+
+    /**
+     * Ambil konfigurasi absensi (buffer check-in/out & geofence).
+     */
+    private function attendanceSettings(): array
+    {
+        $bufferBefore = (int) Setting::getValue('attendance_buffer_before_start', 30);
+        $bufferAfter  = (int) Setting::getValue('attendance_buffer_after_end', 30);
+        $latitude     = Setting::getCoordinate('attendance_geofence_latitude', -7.779071, -6.208864);
+        $longitude    = Setting::getCoordinate('attendance_geofence_longitude', 110.416098, 106.84513);
+        $radius       = (int) Setting::getNumericWithMigration('attendance_geofence_radius_m', 100, 200);
+
+        return [
+            'buffer_before_start' => $bufferBefore,
+            'buffer_after_end'    => $bufferAfter,
+            'latitude'            => $latitude,
+            'longitude'           => $longitude,
+            'radius_m'            => $radius,
+            'requires_geofence'   => $radius > 0,
+        ];
+    }
+
+    /**
+     * Hitung jarak dua koordinat dalam meter (rumus haversine).
+     */
+    private function distanceInMeters(float $lat1, float $lon1, float $lat2, float $lon2): float
+    {
+        $earthRadius = 6371000; // meter
+        $toRad = static fn ($deg) => $deg * M_PI / 180;
+
+        $dLat = $toRad($lat2 - $lat1);
+        $dLon = $toRad($lon2 - $lon1);
+
+        $a = sin($dLat / 2) ** 2 +
+            cos($toRad($lat1)) * cos($toRad($lat2)) *
+            sin($dLon / 2) ** 2;
+
+        $c = 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+        return $earthRadius * $c;
+    }
+
+    /**
+     * Validasi window waktu check-in/out berdasarkan jadwal & buffer owner.
+     *
+     * @return array{0: ?Carbon, 1: ?Carbon}
+     */
+    private function ensureWithinWindow(?Jadwal $jadwal, array $settings, Carbon $now, string $mode): array
+    {
+        if (!$jadwal) {
+            $this->throwWindowError('Belum ada jadwal kerja untuk hari ini.');
+        }
+
+        $start = $this->resolveShiftStart($jadwal);
+        $end   = $this->resolveShiftEnd($jadwal, $start);
+
+        $bufferBefore = max(0, (int) ($settings['buffer_before_start'] ?? 0));
+        $bufferAfter  = max(0, (int) ($settings['buffer_after_end'] ?? 0));
+
+        $checkInOpen  = $start->copy()->subMinutes($bufferBefore);
+        $windowClose  = $end->copy()->addMinutes($bufferAfter);
+
+        if ($mode === 'checkin') {
+            if ($now->lt($checkInOpen)) {
+                $minutes = $now->diffInMinutes($checkInOpen);
+                $this->throwWindowError(
+                    $minutes <= 1
+                        ? 'Check-in dibuka sebentar lagi.'
+                        : "Check-in baru dibuka dalam {$minutes} menit."
+                );
+            }
+
+            if ($now->gt($windowClose)) {
+                $this->throwWindowError('Check-in sudah ditutup untuk shift ini.');
+            }
+        } elseif ($mode === 'checkout') {
+            if ($now->lt($end)) {
+                $this->throwWindowError(
+                    'Check-out tersedia setelah jam selesai (' . $end->format('H:i') . ').'
+                );
+            }
+
+            if ($now->gt($windowClose)) {
+                $this->throwWindowError(
+                    'Batas waktu check-out telah berakhir (' . $windowClose->format('H:i') . ').'
+                );
+            }
+        }
+
+        return [$start, $end];
+    }
+
+    /**
+     * Konversi jadwal ke Carbon start time.
+     */
+    private function resolveShiftStart(Jadwal $jadwal): Carbon
+    {
+        $time = $jadwal->jam_mulai ?: '00:00:00';
+        return Carbon::parse("{$jadwal->tanggal} {$time}");
+    }
+
+    /**
+     * Konversi jadwal ke Carbon end time + handle overnight.
+     */
+    private function resolveShiftEnd(Jadwal $jadwal, Carbon $start): Carbon
+    {
+        $time = $jadwal->jam_selesai ?: $jadwal->jam_mulai;
+        $end  = $time
+            ? Carbon::parse("{$jadwal->tanggal} {$time}")
+            : $start->copy()->addHours(8);
+
+        if ($end->lessThanOrEqualTo($start)) {
+            $end->addDay();
+        }
+
+        return $end;
+    }
+
+    private function throwWindowError(string $message): void
+    {
+        throw new HttpResponseException(response()->json(['message' => $message], 422));
     }
 }

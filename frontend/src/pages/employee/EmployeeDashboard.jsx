@@ -11,32 +11,19 @@ const fmtDate = (d = new Date()) => {
   return local.toISOString().slice(0, 10);
 };
 
-const parseCoord = (value, fallback, axis = "lat") => {
-  if (typeof value === "number" && !Number.isNaN(value)) return value;
-  if (!value) return fallback;
-  const original = String(value).trim();
-  const normalized = original
-    .trim()
-    .replace(/[^0-9,.\-]/g, "")
-    .replace(",", ".");
-  const parsed = parseFloat(normalized);
-  if (!Number.isFinite(parsed)) return fallback;
-
-  let sign = normalized.includes("-") ? -1 : 1;
-  if (sign === 1) {
-    const hasSouth = /[sS]/.test(original);
-    const hasWest = /[wW]/.test(original);
-    if (axis === "lat" && hasSouth) sign = -1;
-    if (axis === "lng" && hasWest) sign = -1;
-  }
-  return Math.abs(parsed) * sign;
+const defaultAttendanceRules = {
+  buffer_before_start: 30,
+  buffer_after_end: 30,
+  latitude: -7.779071,
+  longitude: 110.416098,
+  radius_m: 100,
+  requires_geofence: true,
 };
 
-const OFFICE_COORDS = {
-  lat: parseCoord(import.meta.env.VITE_OFFICE_LAT, -6.208864, "lat"),
-  lng: parseCoord(import.meta.env.VITE_OFFICE_LNG, 106.84513, "lng"),
+const parseSettingNumber = (value, fallback) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
 };
-const ALLOWED_RADIUS_METERS = parseInt(import.meta.env.VITE_OFFICE_RADIUS || "200", 10);
 
 const parseScheduleDateTime = (dateStr, timeStr = "00:00:00") => {
   if (!dateStr || !timeStr) return null;
@@ -74,11 +61,13 @@ export default function EmployeeDashboard() {
   const [weekSummary, setWeekSummary] = React.useState({ hours: 0, days: 0, tips: 0, target: 40 });
   const [history, setHistory] = React.useState([]);
   const [todayAttendance, setTodayAttendance] = React.useState(null);
+  const [attendanceRules, setAttendanceRules] = React.useState(defaultAttendanceRules);
   const [geoStatus, setGeoStatus] = React.useState({
     allowed: false,
     checking: false,
     distance: null,
     message: "",
+    coords: null,
   });
   const [pullHint, setPullHint] = React.useState(0);
   const pullHintRef = React.useRef(0);
@@ -87,6 +76,40 @@ export default function EmployeeDashboard() {
   React.useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const fetchSettings = async () => {
+      try {
+        const res = await api.get("/settings/attendance");
+        if (cancelled) return;
+        const payload = res?.data || {};
+        setAttendanceRules({
+          buffer_before_start: parseSettingNumber(
+            payload.buffer_before_start,
+            defaultAttendanceRules.buffer_before_start
+          ),
+          buffer_after_end: parseSettingNumber(
+            payload.buffer_after_end,
+            defaultAttendanceRules.buffer_after_end
+          ),
+          latitude: parseSettingNumber(payload.latitude, defaultAttendanceRules.latitude),
+          longitude: parseSettingNumber(payload.longitude, defaultAttendanceRules.longitude),
+          radius_m: parseSettingNumber(payload.radius_m, defaultAttendanceRules.radius_m),
+          requires_geofence:
+            typeof payload.requires_geofence === "boolean"
+              ? payload.requires_geofence
+              : defaultAttendanceRules.requires_geofence,
+        });
+      } catch (err) {
+        console.warn("Gagal memuat pengaturan absensi dinamis.", err);
+      }
+    };
+    fetchSettings();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const load = React.useCallback(async () => {
@@ -206,24 +229,57 @@ export default function EmployeeDashboard() {
     };
   }, [load]);
 
+  const officeCoords = React.useMemo(
+    () => ({
+      lat: attendanceRules.latitude ?? defaultAttendanceRules.latitude,
+      lng: attendanceRules.longitude ?? defaultAttendanceRules.longitude,
+    }),
+    [attendanceRules.latitude, attendanceRules.longitude]
+  );
+  const allowedRadius = attendanceRules.radius_m ?? defaultAttendanceRules.radius_m;
+
   React.useEffect(() => {
     if (!todaySchedule) {
-      setGeoStatus((prev) => ({ ...prev, allowed: false, message: "" }));
+      setGeoStatus((prev) => ({ ...prev, allowed: false, message: "", distance: null, coords: null }));
       return;
     }
+
+    if (!attendanceRules.requires_geofence) {
+      setGeoStatus({
+        allowed: true,
+        checking: false,
+        distance: null,
+        message: "",
+        coords: null,
+      });
+      return;
+    }
+
     if (!navigator?.geolocation) {
-      setGeoStatus({ allowed: false, checking: false, distance: null, message: "Perangkat tidak mendukung lokasi." });
+      setGeoStatus({
+        allowed: false,
+        checking: false,
+        distance: null,
+        message: "Perangkat tidak mendukung lokasi.",
+        coords: null,
+      });
       return;
     }
+
     setGeoStatus((prev) => ({ ...prev, checking: true, message: "" }));
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        const dist = distanceInMeters(pos.coords.latitude, pos.coords.longitude, OFFICE_COORDS.lat, OFFICE_COORDS.lng);
+        const dist = distanceInMeters(pos.coords.latitude, pos.coords.longitude, officeCoords.lat, officeCoords.lng);
+        const rounded = Math.round(dist);
         setGeoStatus({
-          allowed: dist <= ALLOWED_RADIUS_METERS,
+          allowed: dist <= allowedRadius,
           checking: false,
-          distance: Math.round(dist),
-          message: dist <= ALLOWED_RADIUS_METERS ? "" : `Anda berada ${Math.round(dist)} m dari lokasi kantor.`,
+          distance: rounded,
+          message:
+            dist <= allowedRadius
+              ? ""
+              : `Anda berada ${rounded} m dari lokasi kantor (batas ${allowedRadius} m).`,
+          coords: { lat: pos.coords.latitude, lng: pos.coords.longitude },
         });
       },
       (err) => {
@@ -232,11 +288,18 @@ export default function EmployeeDashboard() {
           checking: false,
           distance: null,
           message: err?.message || "Izin lokasi ditolak.",
+          coords: null,
         });
       },
       { enableHighAccuracy: true }
     );
-  }, [todaySchedule?.id]);
+  }, [
+    todaySchedule?.id,
+    officeCoords.lat,
+    officeCoords.lng,
+    allowedRadius,
+    attendanceRules.requires_geofence,
+  ]);
 
   const weeklyHours = weekSummary.hours || 0;
   const weeklyDays = weekSummary.days || 0;
@@ -248,10 +311,12 @@ export default function EmployeeDashboard() {
   const scheduleEnd = todaySchedule
     ? parseScheduleDateTime(todaySchedule.tanggal, todaySchedule.jam_selesai || todaySchedule.jam_mulai)
     : null;
-  const checkInWindowStart = scheduleStart
-    ? new Date(scheduleStart.getTime() - 30 * 60 * 1000)
-    : null;
+  const bufferBeforeMs = (attendanceRules.buffer_before_start || 0) * 60 * 1000;
+  const bufferAfterMs = (attendanceRules.buffer_after_end || 0) * 60 * 1000;
+  const checkInWindowStart = scheduleStart ? new Date(scheduleStart.getTime() - bufferBeforeMs) : null;
+  const checkInDeadline = scheduleEnd ? new Date(scheduleEnd.getTime() + bufferAfterMs) : null;
   const beforeWindow = checkInWindowStart ? now < checkInWindowStart : true;
+  const afterWindow = checkInDeadline ? now > checkInDeadline : false;
 
   const alreadyCheckedIn = Boolean(todayAttendance?.check_in);
   const alreadyCheckedOut = Boolean(todayAttendance?.check_out);
@@ -265,7 +330,7 @@ export default function EmployeeDashboard() {
         geoStatus.allowed &&
         !geoStatus.checking &&
         now >= (checkInWindowStart || scheduleStart) &&
-        now <= scheduleEnd
+        !afterWindow
     );
 
   const checkInMessage = (() => {
@@ -273,7 +338,10 @@ export default function EmployeeDashboard() {
     if (alreadyCheckedIn) return "Anda sudah check-in hari ini.";
     if (geoStatus.checking) return "Menunggu konfirmasi lokasi...";
     if (!geoStatus.allowed) {
-      return geoStatus.message || `Check-in hanya bisa dilakukan di area kantor (radius ${ALLOWED_RADIUS_METERS} m).`;
+      return geoStatus.message || `Check-in hanya bisa dilakukan di area kantor (radius ${allowedRadius} m).`;
+    }
+    if (afterWindow) {
+      return "Check-in shift ini sudah ditutup.";
     }
     if (beforeWindow) {
       if (!checkInWindowStart) return "Menunggu jadwal dimulai.";
@@ -283,19 +351,22 @@ export default function EmployeeDashboard() {
     return "";
   })();
 
+  const checkOutDeadline = scheduleEnd ? new Date(scheduleEnd.getTime() + bufferAfterMs) : null;
+  const checkOutExpired = checkOutDeadline ? now > checkOutDeadline : false;
   const showCheckOut = Boolean(
-    todaySchedule && scheduleEnd && alreadyCheckedIn && now >= scheduleEnd
+    todaySchedule && scheduleEnd && alreadyCheckedIn && now >= scheduleEnd && !checkOutExpired
   );
   const canCheckOut = Boolean(
     showCheckOut && !alreadyCheckedOut && geoStatus.allowed && !geoStatus.checking
   );
   const checkOutMessage = (() => {
     if (!todaySchedule) return "";
+    if (checkOutExpired) return "Batas check-out sudah berakhir.";
     if (!showCheckOut) return "Check-out akan tersedia setelah jam selesai.";
     if (alreadyCheckedOut) return "Anda sudah check-out hari ini.";
     if (geoStatus.checking) return "Menunggu konfirmasi lokasi...";
     if (!geoStatus.allowed) {
-      return geoStatus.message || `Check-out hanya bisa dilakukan di area kantor (radius ${ALLOWED_RADIUS_METERS} m).`;
+      return geoStatus.message || `Check-out hanya bisa dilakukan di area kantor (radius ${allowedRadius} m).`;
     }
     return "";
   })();
@@ -322,11 +393,17 @@ export default function EmployeeDashboard() {
       return;
     }
     try {
-      await api.post(`/pegawai/checkin`, { pegawai_id: pegawaiId });
+      await api.post(`/pegawai/checkin`, {
+        pegawai_id: pegawaiId,
+        latitude: geoStatus.coords?.lat,
+        longitude: geoStatus.coords?.lng,
+      });
       toast.success("Check-in berhasil!");
       load();
-    } catch {
-      toast.error("Check-in gagal");
+    } catch (error) {
+      console.error(error);
+      const message = error?.response?.data?.message || "Check-in gagal";
+      toast.error(message);
     }
   };
 
@@ -336,11 +413,17 @@ export default function EmployeeDashboard() {
       return;
     }
     try {
-      await api.post(`/pegawai/checkout`, { pegawai_id: pegawaiId });
+      await api.post(`/pegawai/checkout`, {
+        pegawai_id: pegawaiId,
+        latitude: geoStatus.coords?.lat,
+        longitude: geoStatus.coords?.lng,
+      });
       toast.success("Check-out berhasil!");
       load();
-    } catch {
-      toast.error("Check-out gagal");
+    } catch (error) {
+      console.error(error);
+      const message = error?.response?.data?.message || "Check-out gagal";
+      toast.error(message);
     }
   };
 
@@ -443,7 +526,7 @@ export default function EmployeeDashboard() {
                   {checkOutMessage && <p>{checkOutMessage}</p>}
                   {geoStatus.distance !== null && (
                     <p className="text-xs">
-                      Jarak Anda ±{geoStatus.distance} m dari kantor (maks {ALLOWED_RADIUS_METERS} m).
+                      Jarak Anda ±{geoStatus.distance} m dari kantor (maks {allowedRadius} m).
                     </p>
                   )}
                 </div>

@@ -15,9 +15,15 @@ use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Imports\TransaksiImport;
+use App\Services\Reports\AttendanceReportService;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class ReportController extends Controller
 {
+    public function __construct(
+        protected AttendanceReportService $attendanceReport
+    ) {}
+
     /** Import File Transaksi */
     public function importTransaksi(Request $request)
     {
@@ -666,6 +672,62 @@ class ReportController extends Controller
                 'error'   => $e->getMessage(),
             ], 500);
         }
+    }
+
+    public function attendanceReportPdf(Request $request)
+    {
+        $payload = $this->attendanceReport->build($request->all(), $request->user());
+        $pdf = Pdf::loadView('reports.attendance.pdf', $payload)->setPaper('a4', 'portrait');
+        $fileName = sprintf('Laporan-Absensi-%s.pdf', $payload['meta']['doc_number']);
+        return $pdf->download($fileName);
+    }
+
+    public function attendanceReportCsv(Request $request)
+    {
+        $payload = $this->attendanceReport->build($request->all(), $request->user());
+        $fileName = sprintf('Laporan-Absensi-%s.csv', $payload['meta']['doc_number']);
+
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"$fileName\"",
+        ];
+
+        $columns = ['Tanggal', 'ID Pegawai', 'Nama', 'Shift', 'Jam Masuk', 'Jam Keluar', 'Durasi (jam)', 'Status', 'Keterangan'];
+
+        return response()->stream(function () use ($payload, $columns) {
+            $handle = fopen('php://output', 'w');
+            fprintf($handle, chr(0xEF).chr(0xBB).chr(0xBF));
+
+            fputcsv($handle, ['Laporan Absensi SMPJ']);
+            fputcsv($handle, ['Periode', $payload['meta']['period_label']]);
+            fputcsv($handle, ['Dibuat oleh', $payload['meta']['generated_by']]);
+            fputcsv($handle, ['Tanggal Generate', $payload['meta']['generated_at']]);
+            fputcsv($handle, ['Nomor Dokumen', $payload['meta']['doc_number']]);
+            fputcsv($handle, []);
+
+            fputcsv($handle, ['Ringkasan']);
+            foreach ($payload['summary'] as $key => $value) {
+                fputcsv($handle, [ucwords(str_replace('_', ' ', $key)), $value]);
+            }
+            fputcsv($handle, []);
+
+            fputcsv($handle, $columns);
+            foreach ($payload['rows'] as $row) {
+                fputcsv($handle, [
+                    $row['tanggal'],
+                    $row['pegawai_id'],
+                    $row['pegawai_nama'],
+                    $row['shift'],
+                    $row['jam_masuk'],
+                    $row['jam_keluar'],
+                    $row['durasi'],
+                    $row['status'],
+                    $row['keterangan'],
+                ]);
+            }
+
+            fclose($handle);
+        }, 200, $headers);
     }
 
     /**

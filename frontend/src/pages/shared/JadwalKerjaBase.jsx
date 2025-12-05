@@ -777,7 +777,7 @@ export default function JadwalKerjaBase({ role = "supervisor" }) {
                 onClose={() => setModalDetail(false)}
             >
                 {selectedDetail && (
-                    <div className="space-y-4 max-h-[70vh] overflow-y-auto px-1 text-[15px]">
+                    <div className="space-y-4 px-1 text-[15px]">
                         <div className="grid gap-3 sm:grid-cols-2">
                             <div className="p-4 rounded-xl border bg-[hsl(var(--card))] shadow-sm">
                                 <p className="text-xs font-semibold tracking-wide text-[hsl(var(--muted-foreground))]">Nama Pegawai</p>

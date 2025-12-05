@@ -1,7 +1,14 @@
 import React from 'react';
 
 export const Card = ({ className = '', children }) => (
-  <div className={["ds-card w-full overflow-hidden", className].join(' ')}>{children}</div>
+  <div
+    className={[
+      "rounded-[22px] border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--foreground))] shadow-[0px_10px_25px_rgba(15,23,42,0.08)] hover:shadow-[0px_18px_35px_rgba(15,23,42,0.18)] transition-all duration-300 w-full overflow-hidden",
+      className,
+    ].join(' ')}
+  >
+    {children}
+  </div>
 );
 
 export const CardHeader = ({ className = '', children }) => (

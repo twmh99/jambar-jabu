@@ -380,7 +380,7 @@ export default function Analytics() {
         {fullLoading ? (
           <p className="text-sm text-[hsl(var(--muted-foreground))]">Memuat semua data...</p>
         ) : fullData.length ? (
-          <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
+          <div className="space-y-3 pr-1">
             {fullData.map((item, index) => (
               <button
                 key={`full-${item.nama}-${index}`}

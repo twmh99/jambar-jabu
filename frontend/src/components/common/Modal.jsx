@@ -11,14 +11,10 @@ export default function Modal({
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm m-0 p-0">
+    <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/50 backdrop-blur-sm overflow-y-auto px-4 py-10">
       {/* === Kontainer utama modal === */}
       <div
-        className={`relative w-full ${maxWidth} mx-auto bg-[hsl(var(--card))] text-[hsl(var(--foreground))] rounded-2xl shadow-2xl border border-[hsl(var(--border))] animate-scaleIn overflow-hidden`}
-        style={{
-          overflowX: "hidden",
-          maxWidth: "640px",
-        }}
+        className={`relative w-full ${maxWidth} mx-auto bg-[hsl(var(--card))] text-[hsl(var(--foreground))] rounded-2xl shadow-2xl border border-[hsl(var(--border))] animate-scaleIn`}
       >
         {/* === Header Modal === */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[hsl(var(--border))]">
@@ -32,7 +28,7 @@ export default function Modal({
         </div>
 
         {/* === Isi Modal === */}
-        <div className="p-6 overflow-y-auto overflow-x-hidden max-h-[75vh] [scrollbar-width:none] modal-scroll">
+        <div className="p-6">
           {children}
         </div>
 
