@@ -8,7 +8,9 @@ export const Table = ({ children, className = '', scrollClassName = '' }) => (
     ].join(' ')}
   >
     <div className={["overflow-x-auto rounded-2xl", scrollClassName].join(' ')}>
-      <table className="w-full text-sm text-[hsl(var(--foreground))]/90">{children}</table>
+      <table className="w-full border-collapse text-sm text-[hsl(var(--foreground))]/90">
+        {children}
+      </table>
     </div>
   </div>
 );

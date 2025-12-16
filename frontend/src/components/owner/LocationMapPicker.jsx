@@ -46,10 +46,16 @@ const LocationMapPicker = ({
     return defaultCenter;
   }, [value]);
 
+  const mapKey = React.useMemo(
+    () => `${center?.[0] ?? -7.779071}-${center?.[1] ?? 110.416098}`,
+    [center]
+  );
+
   return (
     <div className={["space-y-3", className].join(" ")}>
       <div className="relative rounded-2xl border border-border overflow-hidden">
         <MapContainer
+          key={mapKey}
           center={center}
           zoom={zoom}
           style={{ height: 340 }}
@@ -92,7 +98,7 @@ const LocationMapPicker = ({
           />
         </MapContainer>
         {children && (
-          <div className="absolute top-3 left-3 flex flex-wrap gap-2">{children}</div>
+          <div className="absolute top-3 right-3 flex flex-wrap gap-2">{children}</div>
         )}
       </div>
     </div>

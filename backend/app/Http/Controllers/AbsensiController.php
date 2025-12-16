@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class AbsensiController extends Controller
 {
@@ -89,9 +90,10 @@ class AbsensiController extends Controller
         $settings = $this->attendanceSettings();
 
         $data = $request->validate([
-            'pegawai_id' => 'required|exists:pegawai,id',
-            'latitude'   => 'nullable|numeric|between:-90,90',
-            'longitude'  => 'nullable|numeric|between:-180,180',
+            'pegawai_id'  => 'required|exists:pegawai,id',
+            'latitude'    => 'nullable|numeric|between:-90,90',
+            'longitude'   => 'nullable|numeric|between:-180,180',
+            'bukti_foto'  => 'nullable|image|max:2048',
         ]);
 
         $today = Carbon::today()->toDateString();
@@ -130,6 +132,12 @@ class AbsensiController extends Controller
             if ($jadwal && !$row->shift) {
                 $row->shift = $jadwal->shift;
             }
+            $row->save();
+        }
+
+        if ($request->hasFile('bukti_foto')) {
+            $path = $request->file('bukti_foto')->store('absensi/bukti', 'public');
+            $row->foto_url = Storage::disk('public')->url($path);
             $row->save();
         }
 
@@ -192,16 +200,22 @@ class AbsensiController extends Controller
             ->orderBy('jam_masuk')
             ->get()
             ->map(function ($r) use ($today) {
-                // ambil shift dari jadwal hari ini (kalau ada)
                 $shift = Jadwal::where('pegawai_id', $r->pegawai_id)
                     ->whereDate('tanggal', $today)
                     ->value('shift');
 
+                $statusLabel = $r->status ?? '—';
+                if (!$r->jam_masuk) {
+                    $statusLabel = 'Belum Check-in';
+                } elseif (!$r->jam_keluar) {
+                    $statusLabel = 'Menunggu Verifikasi';
+                }
+
                 return [
                     'nama'      => optional($r->pegawai)->nama ?? '—',
-                    'shift'     => $shift ?? '—',
+                    'shift'     => $shift ?? $r->shift ?? '—',
                     'jam_masuk' => $r->jam_masuk ?? '—',
-                    'status'    => $r->status ?? '—',
+                    'status'    => $statusLabel,
                 ];
             });
 
@@ -220,12 +234,17 @@ class AbsensiController extends Controller
                     ->whereDate('tanggal', $r->tanggal)
                     ->value('shift');
 
+                $statusLabel = $r->status ?? '—';
+                if ($r->jam_masuk && !$r->jam_keluar) {
+                    $statusLabel = 'Menunggu Verifikasi';
+                }
+
                 return [
                     'id'     => $r->id,
                     'nama'   => optional($r->pegawai)->nama ?? '—',
-                    'shift'  => $shift ?? '—',
+                    'shift'  => $shift ?? $r->shift ?? '—',
                     'waktu'  => $r->jam_masuk ?? '—',
-                    'status' => $r->status ?? '—',
+                    'status' => $statusLabel,
                 ];
             });
 
@@ -320,7 +339,7 @@ class AbsensiController extends Controller
         $bufferAfter  = (int) Setting::getValue('attendance_buffer_after_end', 30);
         $latitude     = Setting::getCoordinate('attendance_geofence_latitude', -7.779071, -6.208864);
         $longitude    = Setting::getCoordinate('attendance_geofence_longitude', 110.416098, 106.84513);
-        $radius       = (int) Setting::getNumericWithMigration('attendance_geofence_radius_m', 100, 200);
+        $radius       = (int) Setting::getNumericWithMigration('attendance_geofence_radius_m', 50, [200, 100]);
 
         return [
             'buffer_before_start' => $bufferBefore,

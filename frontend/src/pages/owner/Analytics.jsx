@@ -386,7 +386,7 @@ export default function Analytics() {
                 key={`full-${item.nama}-${index}`}
                 type="button"
                 onClick={() => handleShowDetail(item)}
-                className="w-full flex items-center justify-between rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-left hover:bg-[hsl(var(--accent))/0.15] transition"
+                className="w-full flex items-center justify-between rounded-2xl border border-[hsl(var(--border))] bg-white/90 px-4 py-3 text-left shadow-[0_4px_16px_rgba(15,23,42,0.08)] hover:shadow-[0_6px_20px_rgba(15,23,42,0.12)] transition"
               >
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-semibold text-[hsl(var(--primary))]">

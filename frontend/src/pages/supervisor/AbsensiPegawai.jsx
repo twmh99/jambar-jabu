@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from "../../components/ui/card";
 import { Table, TBody, THead, TH, TR, TD } from "../../components/ui/table";
+import { Input, Label, Select } from "../../components/ui/input";
 import { toast } from "../../components/ui/toast";
 import api from "../../services/api";
 
@@ -15,17 +16,35 @@ const STATUS_OPTIONS = ["Hadir", "Terlambat", "Izin", "Alpha", "Menunggu Verifik
 const statusBadgeClass = (status) => {
   switch (status) {
     case "Hadir":
-      return "bg-[hsl(var(--success))]";
+      return "badge-success";
     case "Terlambat":
-      return "bg-[hsl(var(--warning))]";
+      return "badge-warning";
     case "Izin":
-      return "bg-sky-500";
+      return "badge-info";
     case "Alpha":
-      return "bg-[hsl(var(--destructive))]";
+      return "badge-danger";
     case "Menunggu Verifikasi":
-      return "bg-slate-500";
+      return "badge-warning";
+    case "Belum Check-in":
+      return "badge-info";
     default:
-      return "bg-[hsl(var(--secondary))]";
+      return "badge-info";
+  }
+};
+
+const getStatusVariant = (status) => {
+  switch (status) {
+    case "Hadir":
+      return "checked";
+    case "Terlambat":
+    case "Menunggu Verifikasi":
+      return "pending";
+    case "Alpha":
+      return "absent";
+    case "Belum Check-in":
+      return "info";
+    default:
+      return "info";
   }
 };
 
@@ -124,9 +143,13 @@ export default function AbsensiPegawai() {
   }, []);
 
   const summary = React.useMemo(() => {
-    const checkedIn = rows.filter((r) => Boolean(r.jam_masuk)).length;
+    const hasCheckedIn = (value) =>
+      Boolean(value && value !== "—" && value !== "-" && value !== "Belum Check-in");
+
+    const checkedIn = rows.filter((r) => hasCheckedIn(r.jam_masuk)).length;
     const pending = rows.filter((r) => r.status === "Menunggu Verifikasi").length;
-    const notCheckedIn = rows.length - checkedIn;
+    const notCheckedIn = Math.max(rows.length - checkedIn, 0);
+
     return [
       {
         label: "Sudah Check-in",
@@ -184,24 +207,22 @@ export default function AbsensiPegawai() {
 
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div className="grid gap-3 md:grid-cols-2 md:w-2/3">
-            <label className="text-sm">
+            <Label className="text-sm">
               <span className="block text-[hsl(var(--muted-foreground))] mb-1">
                 Pencarian Pegawai
               </span>
-              <input
+              <Input
                 type="text"
                 placeholder="Cari nama pegawai..."
-                className="ds-input w-full"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
-            </label>
-            <label className="text-sm">
+            </Label>
+            <Label className="text-sm">
               <span className="block text-[hsl(var(--muted-foreground))] mb-1">
                 Filter Status
               </span>
-              <select
-                className="ds-select w-full"
+              <Select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
@@ -211,8 +232,8 @@ export default function AbsensiPegawai() {
                     {status}
                   </option>
                 ))}
-              </select>
-            </label>
+              </Select>
+            </Label>
           </div>
           <div className="flex gap-2">
             <button
@@ -248,18 +269,22 @@ export default function AbsensiPegawai() {
               <TR key={`${r.id || r.nama}-${i}`}>
                 <TD>{r.nama || "-"}</TD>
                 <TD>{r.shift || "-"}</TD>
-                <TD>{r.jam_masuk || "-"}</TD>
-                <TD>
-                  <span
-                    className={`ds-badge ${statusBadgeClass(
-                      r.status
-                    )} text-white`}
-                  >
-                    {r.status || "-"}
-                  </span>
-                </TD>
-              </TR>
-            ))}
+              <TD>
+                {r.jam_masuk && r.jam_masuk !== "—" && r.jam_masuk !== "-"
+                  ? r.jam_masuk
+                  : "—"}
+              </TD>
+              <TD>
+                <span
+                  className={`badge-status ${statusBadgeClass(r.status)}`}
+                  data-variant={getStatusVariant(r.status)}
+                >
+                  <i className="fa-solid fa-circle text-[8px]" />
+                  {r.status || "-"}
+                </span>
+              </TD>
+            </TR>
+          ))}
             {filteredRows.length === 0 && (
               <TR>
                 <TD

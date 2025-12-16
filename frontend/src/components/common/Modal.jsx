@@ -11,10 +11,9 @@ export default function Modal({
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-start justify-center bg-black/50 backdrop-blur-sm overflow-y-auto px-4 py-10">
-      {/* === Kontainer utama modal === */}
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm px-4 py-6">
       <div
-        className={`relative w-full ${maxWidth} mx-auto bg-[hsl(var(--card))] text-[hsl(var(--foreground))] rounded-2xl shadow-2xl border border-[hsl(var(--border))] animate-scaleIn`}
+        className={`relative w-full ${maxWidth} bg-[hsl(var(--card))] text-[hsl(var(--foreground))] rounded-2xl shadow-2xl border border-[hsl(var(--border))] animate-scaleIn overflow-hidden max-h-[90vh] flex flex-col`}
       >
         {/* === Header Modal === */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[hsl(var(--border))]">
@@ -28,10 +27,7 @@ export default function Modal({
         </div>
 
         {/* === Isi Modal === */}
-        <div className="p-6">
-          {children}
-        </div>
-
+        <div className="p-6 overflow-y-auto flex-1">{children}</div>
       </div>
     </div>,
     document.body

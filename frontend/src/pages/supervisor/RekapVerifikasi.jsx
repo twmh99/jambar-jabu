@@ -10,6 +10,7 @@ import { Table, TBody, THead, TH, TR, TD } from "../../components/ui/table";
 import { Button } from "../../components/ui/button";
 import { toast } from "../../components/ui/toast";
 import Modal from "../../components/common/Modal";
+import ConfirmActionModal from "../../components/ui/ConfirmActionModal";
 import api from "../../services/api";
 
 const truncate = (text, length = 32) => {
@@ -30,6 +31,7 @@ export default function RekapVerifikasi() {
   const [detailOpen, setDetailOpen] = React.useState(false);
   const [detailLoading, setDetailLoading] = React.useState(false);
   const [detailData, setDetailData] = React.useState(null);
+  const [confirmVerifyId, setConfirmVerifyId] = React.useState(null);
   const pegawaiMap = React.useMemo(() => {
     const map = new Map();
     pegawai.forEach((p) => map.set(p.id, p));
@@ -131,7 +133,7 @@ export default function RekapVerifikasi() {
                   <TH>Shift</TH>
                   <TH>Jam Masuk</TH>
                   <TH>Status</TH>
-                  <TH className="text-right">Aksi</TH>
+                  <TH className="text-center">Aksi</TH>
                 </TR>
               </THead>
               <TBody>
@@ -141,7 +143,7 @@ export default function RekapVerifikasi() {
                     <TD>{p.shift}</TD>
                     <TD>{p.waktu}</TD>
                     <TD>{p.status}</TD>
-                    <TD className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                    <TD className="flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
                       <Button
                         variant="outline"
                         type="button"
@@ -153,7 +155,7 @@ export default function RekapVerifikasi() {
                       <Button
                         variant="accent"
                         type="button"
-                        onClick={() => verify(p.id)}
+                        onClick={() => setConfirmVerifyId(p.id)}
                         className="sm:min-w-[150px]"
                       >
                         <i className="fa-solid fa-check mr-2" /> Verifikasi
@@ -197,7 +199,7 @@ export default function RekapVerifikasi() {
                       <div>
                         <p className="font-semibold">{item.nama}</p>
                         <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                          {item.jabatan || "—"} • {item.status}
+                          {item.jabatan || "—"} | {item.status}
                         </p>
                       </div>
                       <span className="text-xs text-[hsl(var(--muted-foreground))]">
@@ -209,10 +211,13 @@ export default function RekapVerifikasi() {
                         })}
                       </span>
                     </div>
-                    <div className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
-                      Diverifikasi oleh <span className="font-medium">{item.supervisor}</span>
-                      <br />
-                      Jam masuk {item.jam_masuk || "—"} • Jam keluar {item.jam_keluar || "—"}
+                    <div className="mt-2 text-xs text-[hsl(var(--muted-foreground))] space-y-1">
+                      <div>
+                        Diverifikasi oleh <span className="font-medium">{item.supervisor}</span>
+                      </div>
+                      <div>
+                        Jam masuk {item.jam_masuk || "—"} | Jam keluar {item.jam_keluar || "—"}
+                      </div>
                     </div>
                   </li>
                 ))}
@@ -235,7 +240,7 @@ export default function RekapVerifikasi() {
         ) : detailData ? (
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <div>
+              <div className="p-4 rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30">
                 <p className="text-xs text-[hsl(var(--muted-foreground))] uppercase">
                   Nama Pegawai
                 </p>
@@ -244,7 +249,7 @@ export default function RekapVerifikasi() {
                   {detailData.jabatan || "—"}
                 </p>
               </div>
-              <div>
+              <div className="p-4 rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30">
                 <p className="text-xs text-[hsl(var(--muted-foreground))] uppercase">
                   Shift
                 </p>
@@ -256,22 +261,22 @@ export default function RekapVerifikasi() {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3">
-              <div>
+              <div className="p-4 rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30">
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">Tanggal</p>
                 <p className="font-medium">{detailData.tanggal || "—"}</p>
               </div>
-              <div>
+              <div className="p-4 rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30">
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">Jam Masuk</p>
                 <p className="font-medium">{detailData.jam_masuk || detailData.waktu || "—"}</p>
               </div>
-              <div>
+              <div className="p-4 rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30">
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">Jam Keluar</p>
                 <p className="font-medium">{detailData.jam_keluar || "Belum tercatat"}</p>
               </div>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="border border-dashed border-[hsl(var(--border))] rounded-lg p-4">
+              <div className="border border-dashed border-[hsl(var(--border))] rounded-xl p-4 bg-[hsl(var(--muted))]/20">
                 <p className="text-sm font-semibold mb-2">Foto Bukti</p>
                 {detailData.foto_url ? (
                   <img
@@ -285,7 +290,7 @@ export default function RekapVerifikasi() {
                   </p>
                 )}
               </div>
-              <div className="border border-dashed border-[hsl(var(--border))] rounded-lg p-4">
+              <div className="border border-dashed border-[hsl(var(--border))] rounded-xl p-4 bg-[hsl(var(--muted))]/20">
                 <p className="text-sm font-semibold mb-2">Lokasi / Koordinat</p>
                 {detailData.latitude && detailData.longitude ? (
                   <div className="space-y-2 text-sm">
@@ -319,6 +324,20 @@ export default function RekapVerifikasi() {
           </p>
         )}
       </Modal>
+
+      <ConfirmActionModal
+        open={!!confirmVerifyId}
+        title="Verifikasi Absensi"
+        message="Yakin ingin memverifikasi absensi ini? Tindakan ini akan mencatat absensi sebagai diverifikasi."
+        confirmText="Verifikasi"
+        cancelText="Batal"
+        onCancel={() => setConfirmVerifyId(null)}
+        onConfirm={async () => {
+          if (!confirmVerifyId) return;
+          await verify(confirmVerifyId);
+          setConfirmVerifyId(null);
+        }}
+      />
     </>
   );
 }

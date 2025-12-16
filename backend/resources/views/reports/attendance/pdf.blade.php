@@ -102,6 +102,7 @@
         @endphp
 
         <section>
+            <h2></h2>
             <h2>Grafik Ringkas</h2>
             <div class="chart-row">
                 <div>
@@ -180,6 +181,7 @@
         </section>
 
         <section>
+            <h2></h2>
             <h2>Tabel Detail Per Pegawai</h2>
             <table>
                 <thead>

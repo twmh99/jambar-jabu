@@ -5,6 +5,7 @@ import { Input, Label } from "../../components/ui/input";
 import api from "../../services/api";
 import { toast } from "../../components/ui/toast";
 import LocationMapPicker from "../../components/owner/LocationMapPicker";
+import ConfirmActionModal from "../../components/ui/ConfirmActionModal";
 
 const DEFAULT_LAT = "-7.779071";
 const DEFAULT_LNG = "110.416098";
@@ -14,7 +15,7 @@ const defaultSettings = {
   buffer_after_end: "30",
   latitude: DEFAULT_LAT,
   longitude: DEFAULT_LNG,
-  radius_m: "100",
+  radius_m: "50",
   requires_geofence: true,
 };
 
@@ -32,11 +33,25 @@ const parseNumber = (value, fallback = 0) => {
   return Number.isFinite(num) ? num : fallback;
 };
 
+const ErrorMessage = ({ message }) => {
+  if (!message) return null;
+  return (
+    <p className="flex items-center gap-1 text-xs text-red-600">
+      <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-white text-[10px] leading-none">
+        !
+      </span>
+      {message}
+    </p>
+  );
+};
+
 export default function AttendanceSettings() {
   const [settings, setSettings] = React.useState(defaultSettings);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [geoLoading, setGeoLoading] = React.useState(false);
+  const [errors, setErrors] = React.useState({});
+  const [confirmState, setConfirmState] = React.useState({ open: false, payload: null });
 
   const loadSettings = React.useCallback(async () => {
     setLoading(true);
@@ -55,28 +70,99 @@ export default function AttendanceSettings() {
     loadSettings();
   }, [loadSettings]);
 
+  const validateField = React.useCallback((field, rawValue) => {
+    const nextErrors = {};
+    const value = parseNumber(rawValue, 0);
+
+    if (field === "buffer_before_start") {
+      if (!rawValue || value < 30 || value > 60) {
+        nextErrors.buffer_before_start = "Wajib di antara 30 - 60 menit sebelum jam masuk.";
+      }
+    }
+    if (field === "buffer_after_end") {
+      if (!rawValue || value < 30) {
+        nextErrors.buffer_after_end = "Minimal 30 menit setelah jam selesai.";
+      }
+    }
+    if (field === "radius_m") {
+      if (!rawValue || value < 50 || value > 100) {
+        nextErrors.radius_m = "Radius harus di antara 50 - 100 meter.";
+      }
+    }
+    if (field === "latitude") {
+      if (!rawValue || value === 0) {
+        nextErrors.latitude = "Latitude tidak boleh kosong.";
+      }
+    }
+    if (field === "longitude") {
+      if (!rawValue || value === 0) {
+        nextErrors.longitude = "Longitude tidak boleh kosong.";
+      }
+    }
+
+    return nextErrors;
+  }, []);
+
   const handleChange = (field) => (event) => {
     const value = event.target.value;
     setSettings((prev) => ({
       ...prev,
       [field]: value,
     }));
+
+    setErrors((prev) => {
+      const next = { ...prev };
+      delete next[field];
+      if (field === "latitude" || field === "longitude") {
+        delete next.latitude;
+        delete next.longitude;
+      }
+      const fieldErrors = validateField(field, value);
+      return { ...next, ...fieldErrors };
+    });
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    setSaving(true);
     try {
       const payload = {
         buffer_before_start: parseNumber(settings.buffer_before_start, 0),
         buffer_after_end: parseNumber(settings.buffer_after_end, 0),
         latitude: parseNumber(settings.latitude, Number(DEFAULT_LAT)),
         longitude: parseNumber(settings.longitude, Number(DEFAULT_LNG)),
-        radius_m: parseNumber(settings.radius_m, 100),
+        radius_m: parseNumber(settings.radius_m, 50),
       };
-      const res = await api.put("/owner/settings", payload);
+      const nextErrors = {
+        ...validateField("buffer_before_start", settings.buffer_before_start),
+        ...validateField("buffer_after_end", settings.buffer_after_end),
+        ...validateField("latitude", settings.latitude),
+        ...validateField("longitude", settings.longitude),
+        ...validateField("radius_m", settings.radius_m),
+      };
+
+      if (Object.keys(nextErrors).length > 0) {
+        setErrors(nextErrors);
+        toast.error("Data tidak valid. Lengkapi seluruh input sesuai ketentuan.");
+        return;
+      }
+
+      setErrors({});
+      setConfirmState({ open: true, payload });
+    } catch (err) {
+      console.error(err);
+      const message = err?.response?.data?.message || "Gagal menyimpan pengaturan absensi.";
+      toast.error(message);
+    }
+  };
+
+  const handleConfirmSave = async () => {
+    if (!confirmState.payload) return;
+    setSaving(true);
+    try {
+      const res = await api.put("/owner/settings", confirmState.payload);
       toast.success(res?.data?.message || "Pengaturan berhasil disimpan.");
-      setSettings((prev) => ({ ...prev, ...normalizePayload(res?.data?.data || payload) }));
+      setSettings((prev) => ({ ...prev, ...normalizePayload(res?.data?.data || confirmState.payload) }));
+      setConfirmState({ open: false, payload: null });
     } catch (err) {
       console.error(err);
       const message = err?.response?.data?.message || "Gagal menyimpan pengaturan absensi.";
@@ -86,11 +172,16 @@ export default function AttendanceSettings() {
     }
   };
 
+  const handleCancelConfirm = () => {
+    if (saving) return;
+    setConfirmState({ open: false, payload: null });
+  };
+
   const radiusValue = parseNumber(settings.radius_m, 0);
-  const radiusInfo =
-    radiusValue > 0
-      ? `Radius aman ${radiusValue} m dari titik kantor.`
-      : "Batas lokasi dimatikan - semua koordinat diterima.";
+  const isRadiusValid = radiusValue >= 50 && radiusValue <= 100;
+  const radiusInfo = isRadiusValid
+    ? `Radius aman ${radiusValue} m dari titik kantor.`
+    : "Radius harus berada pada rentang 50 - 100 meter.";
 
   const mapCoords = React.useMemo(
     () => ({
@@ -103,9 +194,15 @@ export default function AttendanceSettings() {
   const handleMapChange = (coords) => {
     setSettings((prev) => ({
       ...prev,
-      latitude: coords.lat.toFixed(6),
-      longitude: coords.lng.toFixed(6),
+      latitude: String(coords.lat),
+      longitude: String(coords.lng),
     }));
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next.latitude;
+        delete next.longitude;
+        return next;
+      });
   };
 
   const handleUseCurrentLocation = () => {
@@ -125,7 +222,7 @@ export default function AttendanceSettings() {
         setGeoLoading(false);
         toast.error(err?.message || "Gagal mengambil lokasi perangkat.");
       },
-      { enableHighAccuracy: true, timeout: 15000 }
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   };
 
@@ -133,16 +230,28 @@ export default function AttendanceSettings() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">Menu Owner</p>
           <h1 className="text-2xl sm:text-3xl font-semibold text-primary">Pengaturan Absensi</h1>
           <p className="text-sm text-muted-foreground">
             Atur buffer check-in/out dan batas lokasi agar seluruh pegawai mengikuti aturan yang sama.
           </p>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <Button type="button" variant="outline" onClick={loadSettings} disabled={loading || saving}>
-            <i className="fa-solid fa-rotate-right mr-2" />
-            Refresh
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={loadSettings}
+            disabled={loading || saving}
+            className="whitespace-nowrap rounded-sm"
+          >
+            {loading ? (
+              <>
+                <i className="fa-solid fa-spinner animate-spin mr-2" /> Memuat...
+              </>
+            ) : (
+              <>
+                <i className="fa-solid fa-arrows-rotate mr-2" /> Refresh
+              </>
+            )}
           </Button>
         </div>
       </div>
@@ -162,23 +271,28 @@ export default function AttendanceSettings() {
                 <Input
                   id="buffer_before_start"
                   type="number"
-                  min={0}
-                  max={240}
+                  min={30}
+                  max={60}
                   step={5}
                   value={settings.buffer_before_start}
                   onChange={handleChange("buffer_before_start")}
                   required
                 />
-                <p className="text-xs text-muted-foreground">
-                  Pegawai hanya bisa check-in setelah {parseNumber(settings.buffer_before_start, 0)} menit sebelum jadwal dimulai.
+                <p
+                  className={`text-xs ${
+                    errors.buffer_before_start ? "text-red-600" : "text-muted-foreground"
+                  }`}
+                >
+                  Pegawai hanya bisa check-in setelah 30 - 60 menit sebelum jadwal dimulai.
                 </p>
+                <ErrorMessage message={errors.buffer_before_start} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="buffer_after_end">Batas waktu check-out setelah jam selesai</Label>
                 <Input
                   id="buffer_after_end"
                   type="number"
-                  min={0}
+                  min={30}
                   max={240}
                   step={5}
                   value={settings.buffer_after_end}
@@ -188,6 +302,7 @@ export default function AttendanceSettings() {
                 <p className="text-xs text-muted-foreground">
                   Check-out tetap tersedia hingga {parseNumber(settings.buffer_after_end, 0)} menit setelah jam selesai.
                 </p>
+                <ErrorMessage message={errors.buffer_after_end} />
               </div>
             </div>
           </CardContent>
@@ -212,6 +327,7 @@ export default function AttendanceSettings() {
                   onChange={handleChange("latitude")}
                   required
                 />
+                <ErrorMessage message={errors.latitude} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="longitude">Longitude (koordinat)</Label>
@@ -223,6 +339,7 @@ export default function AttendanceSettings() {
                   onChange={handleChange("longitude")}
                   required
                 />
+                <ErrorMessage message={errors.longitude} />
               </div>
             </div>
             <div className="space-y-2">
@@ -231,13 +348,20 @@ export default function AttendanceSettings() {
                 id="radius_m"
                 type="number"
                 min={50}
-                max={2000}
+                max={100}
                 step={10}
                 value={settings.radius_m}
                 onChange={handleChange("radius_m")}
                 required
               />
-              <p className="text-xs text-muted-foreground">{radiusInfo}</p>
+              <p
+                className={`text-xs ${
+                  errors.radius_m || !isRadiusValid ? "text-red-600" : "text-muted-foreground"
+                }`}
+              >
+                {radiusInfo}
+              </p>
+              <ErrorMessage message={errors.radius_m} />
             </div>
             <div className="space-y-2">
               <Label className="text-sm font-medium">Pilih Lokasi pada Peta</Label>
@@ -304,6 +428,17 @@ export default function AttendanceSettings() {
           </Button>
         </div>
       </form>
+      <ConfirmActionModal
+        open={confirmState.open}
+        loading={saving}
+        title="Simpan Pengaturan Absensi"
+        message="Simpan pengaturan absensi ini?"
+        detail="Seluruh pegawai akan mengikuti aturan baru."
+        confirmLabel="Simpan Sekarang"
+        cancelLabel="Batal"
+        onCancel={handleCancelConfirm}
+        onConfirm={handleConfirmSave}
+      />
     </div>
   );
 }

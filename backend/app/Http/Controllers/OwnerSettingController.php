@@ -18,11 +18,11 @@ class OwnerSettingController extends Controller
     {
         $this->authorizeOwner($request);
         $data = $request->validate([
-            'buffer_before_start' => 'required|integer|min:0|max:240',
-            'buffer_after_end'    => 'required|integer|min:0|max:240',
+            'buffer_before_start' => 'required|integer|min:30|max:60',
+            'buffer_after_end'    => 'required|integer|min:30|max:240',
             'latitude'            => 'required|numeric|between:-90,90',
             'longitude'           => 'required|numeric|between:-180,180',
-            'radius_m'            => 'required|integer|min:50|max:2000',
+            'radius_m'            => 'required|integer|min:50|max:100',
         ]);
 
         Setting::setValue('attendance_buffer_before_start', (string) $data['buffer_before_start']);
@@ -44,7 +44,7 @@ class OwnerSettingController extends Controller
 
     private function payload(): array
     {
-        $radius = (int) Setting::getNumericWithMigration('attendance_geofence_radius_m', 100, 200);
+        $radius = (int) Setting::getNumericWithMigration('attendance_geofence_radius_m', 50, [200, 100]);
 
         return [
             'buffer_before_start' => (int) Setting::getValue('attendance_buffer_before_start', 30),

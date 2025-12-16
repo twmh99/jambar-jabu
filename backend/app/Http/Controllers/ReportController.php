@@ -597,7 +597,8 @@ class ReportController extends Controller
                     $warnings[] = "Jam kerja tidak wajar (>18 jam) pada {$tanggal} untuk {$pegawaiName}.";
                 }
                 if ($trx && $jamKerja === 0.0) {
-                    $warnings[] = "Transaksi ditemukan tetapi jam kerja kosong pada {$tanggal} untuk {$pegawaiName}.";
+                    $formattedTanggal = Carbon::parse($tanggal)->format('d-m-Y');
+                    $warnings[] = "Transaksi ditemukan tetapi jam kerja kosong pada {$formattedTanggal} untuk {$pegawaiName}.";
                 }
                 if ($jamKerja > 0 && $gajiDasar <= 0) {
                     $warnings[] = "Gaji dasar nol padahal ada jam kerja pada {$tanggal} untuk {$pegawaiName}.";

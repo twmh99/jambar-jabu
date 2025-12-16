@@ -231,11 +231,10 @@ export default function PayrollReport() {
   const formatDateOnly = (value) => {
     const parsed = parseClientDate(value);
     if (!parsed) return value || "-";
-    return parsed.toLocaleDateString("id-ID", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
+    const day = String(parsed.getDate()).padStart(2, "0");
+    const month = String(parsed.getMonth() + 1).padStart(2, "0");
+    const year = parsed.getFullYear();
+    return `${day}-${month}-${year}`;
   };
 
   const formatDateRange = (meta) => {
@@ -243,6 +242,16 @@ export default function PayrollReport() {
     const fromLabel = meta?.min_date ? formatDateOnly(meta.min_date) : "-";
     const toLabel = meta?.max_date ? formatDateOnly(meta.max_date) : "-";
     return `${fromLabel} s/d ${toLabel}`;
+  };
+
+  const formatWeekLabel = (label) => {
+    if (!label) return "-";
+    const match = label.match(/Minggu\s+(\d+)\s+(\d{4})/i);
+    if (match) {
+      const [, week, year] = match;
+      return `Minggu ke-${week} (${year})`;
+    }
+    return label;
   };
 
   // ================================================================
@@ -647,7 +656,7 @@ export default function PayrollReport() {
                 <TBody>
                   {rows.map((r, i) => (
                     <TR key={i}>
-                      <TD>{r.tanggal}</TD>
+                      <TD>{formatDateOnly(r.tanggal)}</TD>
                       <TD>{r.pegawai}</TD>
                       <TD>{formatJam(r.jam_kerja)}</TD>
                       <TD>{formatCurrency(r.rate)}</TD>
@@ -690,7 +699,7 @@ export default function PayrollReport() {
                   <TBody>
                     {summary.daily.map((d, idx) => (
                       <TR key={`daily-${idx}`}>
-                        <TD>{d.tanggal}</TD>
+                        <TD>{formatDateOnly(d.tanggal)}</TD>
                         <TD>{formatJam(d.total_jam)}</TD>
                         <TD>{formatCurrency(d.total_gaji)}</TD>
                         <TD>{formatCurrency(d.total_tip)}</TD>
@@ -724,10 +733,8 @@ export default function PayrollReport() {
                     {summary.weekly.map((d, idx) => (
                       <TR key={`weekly-${idx}`}>
                         <TD>
-                          <div className="font-medium">{d.label}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {d.range}
-                          </div>
+                          <div className="font-medium">{formatWeekLabel(d.label)}</div>
+                          <div className="text-xs text-muted-foreground">{d.range}</div>
                         </TD>
                         <TD>{formatJam(d.total_jam)}</TD>
                         <TD>{formatCurrency(d.total_gaji)}</TD>

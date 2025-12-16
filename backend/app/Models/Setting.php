@@ -44,13 +44,22 @@ class Setting extends Model
     /**
      * General helper for numeric settings with optional migration from old defaults.
      */
-    public static function getNumericWithMigration(string $key, float $default, ?float $legacyDefault = null): float
+    public static function getNumericWithMigration(string $key, float $default, $legacyDefaults = null): float
     {
         $value = (float) static::getValue($key, $default);
 
-        if ($legacyDefault !== null && abs($value - $legacyDefault) < 0.000001) {
-            static::setValue($key, $default);
-            return $default;
+        $candidates = [];
+        if (is_array($legacyDefaults)) {
+            $candidates = $legacyDefaults;
+        } elseif ($legacyDefaults !== null) {
+            $candidates = [$legacyDefaults];
+        }
+
+        foreach ($candidates as $legacy) {
+            if (abs($value - (float) $legacy) < 0.000001) {
+                static::setValue($key, $default);
+                return $default;
+            }
         }
 
         return $value;

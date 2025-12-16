@@ -10,7 +10,17 @@ class Absensi extends Model
     use HasFactory;
 
     protected $table = 'absensi';
-    protected $fillable = ['pegawai_id', 'supervisor_id', 'tanggal', 'jam_masuk', 'jam_keluar', 'status', 'tip', 'shift'];
+    protected $fillable = [
+        'pegawai_id',
+        'supervisor_id',
+        'tanggal',
+        'jam_masuk',
+        'jam_keluar',
+        'status',
+        'tip',
+        'shift',
+        'foto_url',
+    ];
 
 
     protected $casts = [

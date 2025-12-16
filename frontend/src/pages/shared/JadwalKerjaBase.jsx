@@ -134,6 +134,16 @@ export default function JadwalKerjaBase({ role = "supervisor" }) {
         return `${formatter.format(start)} - ${formatter.format(end)}`;
     };
 
+    const formatDateShort = (value) => {
+        if (!value) return "—";
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return value;
+        const day = String(d.getDate()).padStart(2, "0");
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const year = d.getFullYear();
+        return `${day}-${month}-${year}`;
+    };
+
     const formatDateDisplay = (value) => {
         if (!value) return "—";
         const d = new Date(value);
@@ -723,7 +733,7 @@ export default function JadwalKerjaBase({ role = "supervisor" }) {
                                     >
                                         <TD>{r.nama}</TD>
                                         <TD>{r.shift}</TD>
-                                        <TD>{r.tanggal}</TD>
+                                        <TD>{formatDateShort(r.tanggal)}</TD>
                                         <TD>
                                             {r.jam_mulai} - {r.jam_selesai}
                                         </TD>

@@ -4,6 +4,7 @@ import { Button } from "../../components/ui/button";
 import { Table, TBody, THead, TH, TR, TD } from "../../components/ui/table";
 import { Input, Label, Select } from "../../components/ui/input";
 import Modal from "../../components/common/Modal";
+import ConfirmActionModal from "../../components/ui/ConfirmActionModal";
 import { toast } from "../../components/ui/toast";
 import api from "../../services/api";
 import { Sparkline } from "../../components/charts/Sparkline";
@@ -91,6 +92,7 @@ export default function SupervisorDashboard() {
   const [modalAdd, setModalAdd] = React.useState(false);
   const [modalVerify, setModalVerify] = React.useState(false);
   const [pendingVerify, setPendingVerify] = React.useState([]);
+  const [confirmVerifyId, setConfirmVerifyId] = React.useState(null);
   const [employees, setEmployees] = React.useState([]);
   const [pegawaiId, setPegawaiId] = React.useState("");
   const [metrics, setMetrics] = React.useState({
@@ -687,20 +689,20 @@ export default function SupervisorDashboard() {
                 <TD>{p.nama}</TD>
                 <TD>{p.waktu}</TD>
                 <TD>{p.status}</TD>
-                <TD className="flex gap-2">
+                <TD className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
                   <button
                     onClick={() => openVerifyDetail(p)}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-[#1e293b]/80 transition"
+                    className="inline-flex items-center gap-2 px-5 py-2 rounded-full border border-gray-200 text-sm font-medium text-gray-700 bg-white shadow-[inset_0_-1px_0_rgba(15,23,42,0.12)] hover:shadow-md transition"
                   >
                     <i className="fa-solid fa-eye" />
                     Detail
                   </button>
                   <button
-                    onClick={() => verifyAttendance(p.id)}
-                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border border-gray-300 text-sm font-medium text-gray-700 hover:bg-green-100 hover:shadow-md hover:shadow-emerald-200/40 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-[#1e293b]/80 dark:hover:shadow-emerald-400/30 dark:hover:text-emerald-300 transition-all duration-300"
+                    onClick={() => setConfirmVerifyId(p.id)}
+                    className="inline-flex items-center gap-2 px-6 py-2 rounded-full text-base font-medium text-[#1f2937] bg-amber-500 hover:bg-amber-400 border border-[#f0a500]/30 transition-colors"
                     title="Verifikasi Absensi"
                   >
-                    <i className="fa-solid fa-circle-check text-green-500 dark:text-emerald-400" />
+                    <i className="fa-solid fa-check" />
                     <span>Verifikasi</span>
                   </button>
                 </TD>
@@ -730,7 +732,7 @@ export default function SupervisorDashboard() {
         ) : verifyDetail ? (
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <div>
+              <div className="p-4 rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30">
                 <p className="text-xs text-[hsl(var(--muted-foreground))] uppercase">
                   Nama Pegawai
                 </p>
@@ -739,7 +741,7 @@ export default function SupervisorDashboard() {
                   {verifyDetail.jabatan || "—"}
                 </p>
               </div>
-              <div>
+              <div className="p-4 rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30">
                 <p className="text-xs text-[hsl(var(--muted-foreground))] uppercase">Shift</p>
                 <p className="text-lg font-semibold">{verifyDetail.shift || "—"}</p>
                 <p className="text-sm text-[hsl(var(--muted-foreground))]">
@@ -748,21 +750,22 @@ export default function SupervisorDashboard() {
               </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
-              <div>
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">Tanggal</p>
-                <p className="font-medium">{verifyDetail.tanggal || "—"}</p>
-              </div>
-              <div>
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">Jam Masuk</p>
-                <p className="font-medium">{verifyDetail.jam_masuk || verifyDetail.waktu || "—"}</p>
-              </div>
-              <div>
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">Jam Keluar</p>
-                <p className="font-medium">{verifyDetail.jam_keluar || "Belum tercatat"}</p>
-              </div>
+              {[
+                { label: "Tanggal", value: verifyDetail.tanggal || "—" },
+                { label: "Jam Masuk", value: verifyDetail.jam_masuk || verifyDetail.waktu || "—" },
+                { label: "Jam Keluar", value: verifyDetail.jam_keluar || "Belum tercatat" },
+              ].map((field) => (
+                <div
+                  key={field.label}
+                  className="p-4 rounded-xl border border-dashed border-[hsl(var(--border))] bg-[hsl(var(--muted))]/30"
+                >
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">{field.label}</p>
+                  <p className="font-medium">{field.value}</p>
+                </div>
+              ))}
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="border border-dashed border-[hsl(var(--border))] rounded-lg p-4">
+              <div className="border border-dashed border-[hsl(var(--border))] rounded-xl p-4 bg-[hsl(var(--muted))]/20">
                 <p className="text-sm font-semibold mb-2">Foto Bukti</p>
                 {verifyDetail.foto_url ? (
                   <img
@@ -776,12 +779,12 @@ export default function SupervisorDashboard() {
                   </p>
                 )}
               </div>
-              <div className="border border-dashed border-[hsl(var(--border))] rounded-lg p-4">
+              <div className="border border-dashed border-[hsl(var(--border))] rounded-xl p-4 bg-[hsl(var(--muted))]/20">
                 <p className="text-sm font-semibold mb-2">Lokasi / Koordinat</p>
                 {verifyDetail.latitude && verifyDetail.longitude ? (
                   <div className="space-y-2 text-sm">
                     <p>
-                      Lat: <span className="font-mono">{verifyDetail.latitude}</span>
+                      Lat: <span className="font-mono">{verifyDetail.latitude}}</span>
                       <br />
                       Lng: <span className="font-mono">{verifyDetail.longitude}</span>
                     </p>
@@ -810,6 +813,19 @@ export default function SupervisorDashboard() {
           </p>
         )}
       </Modal>
+      <ConfirmActionModal
+        open={!!confirmVerifyId}
+        title="Verifikasi Absensi"
+        message="Yakin ingin memverifikasi absensi ini? Tindakan ini akan mencatat absensi sebagai diverifikasi."
+        confirmText="Verifikasi"
+        cancelText="Batal"
+        onCancel={() => setConfirmVerifyId(null)}
+        onConfirm={async () => {
+          if (!confirmVerifyId) return;
+          await verifyAttendance(confirmVerifyId);
+          setConfirmVerifyId(null);
+        }}
+      />
     </div>
   );
 }

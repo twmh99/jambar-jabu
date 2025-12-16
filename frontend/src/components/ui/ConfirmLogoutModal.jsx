@@ -13,13 +13,13 @@ export default function ConfirmLogoutModal({ open, onCancel, onConfirm }) {
         <div className="flex justify-end gap-3">
           <button
             onClick={onCancel}
-            className="btn-neutral"
+            className="btn-neutral px-4 py-2"
           >
             Batal
           </button>
           <button
             onClick={onConfirm}
-            className="px-4 py-2 rounded-md bg-[hsl(var(--accent))] text-[hsl(var(--accent-foreground))] hover:bg-[hsl(var(--accent)/0.9)] transition"
+            className="px-4 py-2 rounded-md bg-[#dc2626] text-white hover:bg-[#b91c1c] transition"
           >
             Keluar
           </button>

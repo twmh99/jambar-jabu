@@ -22,7 +22,7 @@ return new class extends Migration
             ['key' => 'attendance_buffer_after_end', 'value' => '30', 'description' => 'Buffer check-out (minutes) setelah jadwal selesai', 'created_at' => now(), 'updated_at' => now()],
             ['key' => 'attendance_geofence_latitude', 'value' => '-7.779071', 'description' => 'Latitude lokasi kantor', 'created_at' => now(), 'updated_at' => now()],
             ['key' => 'attendance_geofence_longitude', 'value' => '110.416098', 'description' => 'Longitude lokasi kantor', 'created_at' => now(), 'updated_at' => now()],
-            ['key' => 'attendance_geofence_radius_m', 'value' => '100', 'description' => 'Radius geofence dalam meter', 'created_at' => now(), 'updated_at' => now()],
+            ['key' => 'attendance_geofence_radius_m', 'value' => '50', 'description' => 'Radius geofence dalam meter', 'created_at' => now(), 'updated_at' => now()],
         ]);
     }
 

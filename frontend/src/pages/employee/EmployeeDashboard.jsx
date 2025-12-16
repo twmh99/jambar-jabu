@@ -11,6 +11,8 @@ const fmtDate = (d = new Date()) => {
   return local.toISOString().slice(0, 10);
 };
 
+const MAX_PROOF_SIZE = 2 * 1024 * 1024; // 2 MB
+
 const defaultAttendanceRules = {
   buffer_before_start: 30,
   buffer_after_end: 30,
@@ -72,6 +74,10 @@ export default function EmployeeDashboard() {
   const [pullHint, setPullHint] = React.useState(0);
   const pullHintRef = React.useRef(0);
   const isRefreshing = React.useRef(false);
+  const [checkInPhoto, setCheckInPhoto] = React.useState(null);
+  const [checkInPhotoPreview, setCheckInPhotoPreview] = React.useState("");
+  const [photoError, setPhotoError] = React.useState("");
+  const photoInputRef = React.useRef(null);
 
   React.useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
@@ -392,13 +398,27 @@ export default function EmployeeDashboard() {
       toast.error(checkInMessage || "Check-in tidak sesuai jadwal.");
       return;
     }
+    if (photoError) {
+      toast.error("Perbaiki bukti foto sebelum check-in.");
+      return;
+    }
     try {
-      await api.post(`/pegawai/checkin`, {
-        pegawai_id: pegawaiId,
-        latitude: geoStatus.coords?.lat,
-        longitude: geoStatus.coords?.lng,
+      const formData = new FormData();
+      formData.append("pegawai_id", pegawaiId);
+      if (geoStatus.coords?.lat) formData.append("latitude", geoStatus.coords.lat);
+      if (geoStatus.coords?.lng) formData.append("longitude", geoStatus.coords.lng);
+      if (checkInPhoto) {
+        formData.append("bukti_foto", checkInPhoto);
+      }
+      await api.post(`/pegawai/checkin`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
       });
       toast.success("Check-in berhasil!");
+      setCheckInPhoto(null);
+      setCheckInPhotoPreview("");
+      if (photoInputRef.current) {
+        photoInputRef.current.value = "";
+      }
       load();
     } catch (error) {
       console.error(error);
@@ -424,6 +444,42 @@ export default function EmployeeDashboard() {
       console.error(error);
       const message = error?.response?.data?.message || "Check-out gagal";
       toast.error(message);
+    }
+  };
+
+  const handlePhotoChange = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      setCheckInPhoto(null);
+      setCheckInPhotoPreview("");
+      setPhotoError("");
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      setPhotoError("Bukti foto harus berupa gambar (JPG/PNG).");
+      setCheckInPhoto(null);
+      setCheckInPhotoPreview("");
+      return;
+    }
+    if (file.size > MAX_PROOF_SIZE) {
+      setPhotoError("Ukuran bukti foto maksimal 2 MB.");
+      setCheckInPhoto(null);
+      setCheckInPhotoPreview("");
+      return;
+    }
+    setPhotoError("");
+    setCheckInPhoto(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setCheckInPhotoPreview(reader.result?.toString() || "");
+    reader.readAsDataURL(file);
+  };
+
+  const clearPhoto = () => {
+    setCheckInPhoto(null);
+    setCheckInPhotoPreview("");
+    setPhotoError("");
+    if (photoInputRef.current) {
+      photoInputRef.current.value = "";
     }
   };
 
@@ -530,6 +586,53 @@ export default function EmployeeDashboard() {
                     </p>
                   )}
                 </div>
+              </div>
+
+              <div className="rounded-xl border bg-muted/5 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">Bukti Foto Check-in (opsional)</p>
+                    <p className="text-xs text-muted-foreground">
+                      Foto membantu supervisor memverifikasi lokasi atau aktivitas check-in Anda.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {checkInPhoto && (
+                      <Button variant="ghost" size="sm" onClick={clearPhoto}>
+                        <i className="fa-solid fa-xmark mr-1" /> Hapus
+                      </Button>
+                    )}
+                    <Button variant="outline" size="sm" onClick={() => photoInputRef.current?.click()}>
+                      <i className="fa-solid fa-camera mr-2" /> Pilih Foto
+                    </Button>
+                    <input
+                      ref={photoInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handlePhotoChange}
+                    />
+                  </div>
+                </div>
+                {photoError ? (
+                  <p className="mt-3 text-xs text-red-500 flex items-center gap-1">
+                    <i className="fa-solid fa-circle-exclamation" /> {photoError}
+                  </p>
+                ) : (
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    Format JPG/PNG dengan ukuran maksimal 2 MB.
+                  </p>
+                )}
+                {checkInPhotoPreview && (
+                  <div className="mt-3">
+                    <img
+                      src={checkInPhotoPreview}
+                      alt="Preview bukti foto"
+                      className="h-40 w-full rounded-lg border object-cover"
+                    />
+                    <p className="mt-2 text-xs text-muted-foreground break-all">{checkInPhoto?.name}</p>
+                  </div>
+                )}
               </div>
             </div>
           ) : (

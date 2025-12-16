@@ -18,6 +18,7 @@ import {
   Bar,
   Legend,
 } from "recharts";
+import { Label, Select } from "../../components/ui/input";
 import { toast } from "../../components/ui/toast";
 import api from "../../services/api";
 
@@ -33,6 +34,17 @@ const formatDateInput = (date) => {
   const month = `${d.getMonth() + 1}`.padStart(2, "0");
   const day = `${d.getDate()}`.padStart(2, "0");
   return `${d.getFullYear()}-${month}-${day}`;
+};
+
+const formatDateDisplay = (value) => {
+  if (!value) return "-";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleDateString("id-ID", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
 };
 
 const toMinutes = (time) => {
@@ -164,17 +176,46 @@ export default function LaporanPeriodik() {
     load();
   }, [load]);
 
+  const formatMonthLabel = (value) => {
+    if (!value) return "-";
+    const str = String(value);
+    if (/^\d{4}-\d{2}$/.test(str)) {
+      const [year, month] = str.split("-");
+      const date = new Date(Number(year), Number(month) - 1, 1);
+      return date.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+    }
+    return value;
+  };
+
+  const formatWeekLabel = (raw) => {
+    if (!raw) return "-";
+    const str = String(raw);
+    if (/^\d{6}$/.test(str)) {
+      const year = Number(str.slice(0, 4));
+      const week = Number(str.slice(4));
+      const base = new Date(year, 0, 1 + (week - 1) * 7);
+      const day = base.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      const monday = new Date(base);
+      monday.setDate(base.getDate() + diff);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      return `Minggu ke-${week} (${formatDateDisplay(monday)} - ${formatDateDisplay(sunday)})`;
+    }
+    return raw;
+  };
+
   const chartData = React.useMemo(() => {
     if (viewMode === "weekly") {
       return weeklyData.map((item) => ({
-        label: `Minggu ${item.minggu}`,
+        label: formatWeekLabel(item.minggu),
         kehadiran: item.kehadiran,
         produktivitas: item.produktivitas,
       }));
     }
     if (viewMode === "monthly") {
       return monthlyData.map((item) => ({
-        label: item.label,
+        label: formatMonthLabel(item.label),
         kehadiran: item.kehadiran,
         produktivitas: item.produktivitas,
       }));
@@ -189,8 +230,12 @@ export default function LaporanPeriodik() {
     const previous = dataset[dataset.length - 2];
     const labelKey = compareMode === "week" ? "minggu" : "label";
     return {
-      currentLabel: current[labelKey],
-      previousLabel: previous[labelKey] ?? "-",
+      currentLabel:
+        compareMode === "week" ? formatWeekLabel(current[labelKey]) : current[labelKey],
+      previousLabel:
+        compareMode === "week"
+          ? formatWeekLabel(previous[labelKey])
+          : previous[labelKey] ?? "-",
       kehadiranDelta: current.kehadiran - previous.kehadiran,
       produktivitasDelta: current.produktivitas - previous.produktivitas,
     };
@@ -208,6 +253,12 @@ export default function LaporanPeriodik() {
     () => buildDeptStats(filteredAbsensi, pegawaiMap),
     [filteredAbsensi, pegawaiMap]
   );
+
+  const chartMinWidth = React.useMemo(() => {
+    if (chartData.length === 0) return 640;
+    const approxWidth = chartData.length * 110;
+    return Math.min(Math.max(approxWidth, 640), 2000);
+  }, [chartData.length]);
 
   return (
     <div className="space-y-6">
@@ -242,17 +293,13 @@ export default function LaporanPeriodik() {
               ))}
             </div>
 
-            <label className="text-sm text-[hsl(var(--muted-foreground))] flex items-center gap-2">
+            <Label className="text-sm text-[hsl(var(--muted-foreground))] flex items-center gap-2">
               Bandingkan berdasarkan
-              <select
-                className="ds-select"
-                value={compareMode}
-                onChange={(e) => setCompareMode(e.target.value)}
-              >
+              <Select value={compareMode} onChange={(e) => setCompareMode(e.target.value)}>
                 <option value="week">Mingguan</option>
                 <option value="month">Bulanan</option>
-              </select>
-            </label>
+              </Select>
+            </Label>
           </div>
 
           {viewMode === "custom" && (
@@ -290,32 +337,45 @@ export default function LaporanPeriodik() {
             </div>
           )}
 
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e0e6ed" />
-                <XAxis dataKey="label" />
-                <YAxis domain={[0, 110]} />
-                <Tooltip />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="kehadiran"
-                  name="Kehadiran (%)"
-                  stroke="#0f5fa6"
-                  strokeWidth={3}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="produktivitas"
-                  name="Produktivitas (%)"
-                  stroke="#f7b733"
-                  strokeWidth={3}
-                  dot={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+          <div className="h-80 overflow-x-auto">
+            <div style={{ minWidth: chartMinWidth, height: "100%", marginBottom: chartData.length > 6 ? 8 : 0 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e0e6ed" />
+                  <XAxis
+                    dataKey="label"
+                    interval={chartData.length > 8 ? 1 : 0}
+                    tickMargin={10}
+                    tick={{ fontSize: 11 }}
+                    height={60}
+                  />
+                  <YAxis domain={[0, 110]} />
+                  <Tooltip />
+                  <Legend />
+                  <Line
+                    type="monotone"
+                    dataKey="kehadiran"
+                    name="Kehadiran (%)"
+                    stroke="#0f5fa6"
+                    strokeWidth={3}
+                    dot={false}
+                  />
+                    <Line
+                      type="monotone"
+                      dataKey="produktivitas"
+                      name="Produktivitas (%)"
+                    stroke="#f7b733"
+                    strokeWidth={3}
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            {chartData.length > 6 && (
+              <div className="text-right text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                Geser untuk melihat minggu lain →
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -363,7 +423,7 @@ export default function LaporanPeriodik() {
           <CardHeader>
             <CardTitle>Distribusi Per Shift</CardTitle>
             <CardDescription>
-              Total absensi pada rentang {customRange.from} s.d. {customRange.to}
+              Total absensi pada rentang {formatDateDisplay(customRange.from)} s.d. {formatDateDisplay(customRange.to)}
             </CardDescription>
           </CardHeader>
           <CardContent className="h-72">

@@ -188,6 +188,49 @@ select.ds-input option {
   color: hsl(var(--muted-foreground));
 }
 
+.badge-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  padding: 0.25rem 0.65rem;
+  text-transform: capitalize;
+  letter-spacing: 0.01em;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.04);
+}
+
+.badge-status[data-variant='checked'] {
+  background-color: hsl(var(--success) / 0.15);
+  color: hsl(var(--success));
+}
+
+.badge-status[data-variant='pending'] {
+  background-color: hsl(var(--warning) / 0.15);
+  color: hsl(var(--warning));
+}
+
+.badge-status[data-variant='absent'] {
+  background-color: hsl(var(--destructive) / 0.12);
+  color: hsl(var(--destructive));
+}
+
+.badge-status[data-variant='info'] {
+  background-color: hsl(var(--primary) / 0.15);
+  color: hsl(var(--primary));
+}
+
+.dark .badge-status[data-variant='pending'] {
+  color: hsl(var(--warning));
+  background-color: hsl(var(--warning) / 0.25);
+}
+
+.dark .badge-status[data-variant='info'] {
+  color: hsl(var(--accent));
+  background-color: hsl(var(--accent) / 0.25);
+}
+
 .search-input i {
   color: rgba(71, 85, 105, 0.85);
   font-size: 0.95rem;
@@ -592,4 +635,12 @@ button i.fa-pen {
 .btn-neutral:hover {
   background-color: #e6eaf1;
   color: rgba(15, 23, 42, 0.95);
+}
+
+/* Leaflet attribution flag → ganti menjadi bendera Indonesia */
+.leaflet-control-attribution .leaflet-attribution-flag {
+  display: none !important;
+  width: 0;
+  height: 0;
+  margin-right: 0;
 }

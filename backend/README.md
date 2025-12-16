@@ -7,6 +7,14 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## SMPJ specific setup
+
+The SMPJ modules extend Laravel with attendance proof uploads. To enable the feature:
+
+- Run the latest migrations (`php artisan migrate`) so the `absensi` table gets the new `foto_url` column.
+- Expose uploaded files by linking the public disk once (`php artisan storage:link`).
+- Ensure the queue/worker that processes attendance keeps the `storage/app/public` directory writable, because employee check-in photos are saved there and displayed on supervisor dashboards.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

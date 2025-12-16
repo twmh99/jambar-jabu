@@ -33,6 +33,7 @@ export const Input = React.forwardRef(
 
     const handleInvalid = React.useCallback(
       (event) => {
+        event.preventDefault();
         const validity = event.target.validity;
         let custom = "";
         if (validity.valueMissing) {
@@ -41,9 +42,6 @@ export const Input = React.forwardRef(
           custom = invalidFormatMessage;
         }
         event.target.setCustomValidity(custom);
-        if (custom) {
-          event.target.reportValidity();
-        }
         if (onInvalid) onInvalid(event);
       },
       [message, invalidFormatMessage, onInvalid]
@@ -84,7 +82,7 @@ export const Label = ({ className = "", children, ...props }) => (
   </label>
 );
 
-export const Select = ({
+export const Select = React.forwardRef(({
   className = "",
   children,
   onChange,
@@ -93,7 +91,7 @@ export const Select = ({
   onInvalid,
   onInput,
   ...props
-}) => {
+}, ref) => {
   const [open, setOpen] = React.useState(false);
   const message = composeRequiredMessage(props, requiredMessage || fieldLabel);
 
@@ -132,6 +130,7 @@ export const Select = ({
 
   return (
     <select
+      ref={ref}
       className={["ds-input", open ? "ds-select-open" : "", className].join(" ")}
       onChange={handleChange}
       onFocus={() => setOpen(true)}
@@ -144,4 +143,5 @@ export const Select = ({
       {children}
     </select>
   );
-};
+});
+Select.displayName = "Select";

@@ -29,6 +29,16 @@ export default function AttendanceReport() {
   const [exportingPdf, setExportingPdf] = React.useState(false);
   const [exportingCsv, setExportingCsv] = React.useState(false);
 
+  const formatDateDisplay = React.useCallback((value) => {
+    if (!value) return "-";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  }, []);
+
   React.useEffect(() => {
     (async () => {
       try {
@@ -236,7 +246,7 @@ export default function AttendanceReport() {
               <TBody>
                 {rows.map((r, i) => (
                   <TR key={i}>
-                    <TD>{r.tanggal}</TD>
+                    <TD>{formatDateDisplay(r.tanggal)}</TD>
                     <TD>{r.pegawai}</TD>
                     <TD>{r.check_in}</TD>
                     <TD>{r.check_out}</TD>
