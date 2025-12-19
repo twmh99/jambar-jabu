@@ -49,7 +49,7 @@ export default function WorkProgress({
           style={{
             width: `${pct}%`,
             background:
-              "linear-gradient(90deg, hsl(var(--accent)) 0%, hsl(var(--primary)) 100%)",
+              "linear-gradient(90deg, hsl(var(--primary)) 0%, hsl(var(--primary) / 0.75) 100%)",
           }}
         />
       </div>

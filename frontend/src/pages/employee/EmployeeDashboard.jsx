@@ -154,9 +154,16 @@ export default function EmployeeDashboard() {
       const weekRows = attendances.filter((r) => r.tanggal >= weekStart);
       const workedDays = new Set(weekRows.map((r) => r.tanggal)).size;
       const hours = weekRows.reduce((acc, r) => {
-        const tin = parseHMS(r.check_in),
-          tout = parseHMS(r.check_out);
-        if (tin && tout && tout > tin) acc += (tout - tin) / 3600;
+        const tin = parseHMS(r.jam_masuk || r.check_in);
+        const toutRaw = parseHMS(r.jam_keluar || r.check_out);
+        if (Number.isFinite(tin) && Number.isFinite(toutRaw)) {
+          let tout = toutRaw;
+          if (tout < tin) {
+            // Handle shifts that end after midnight.
+            tout += 24 * 3600;
+          }
+          if (tout > tin) acc += (tout - tin) / 3600;
+        }
         return acc;
       }, 0);
       const tipSum = weekRows.reduce((acc, r) => acc + Number(r.tip || 0), 0);

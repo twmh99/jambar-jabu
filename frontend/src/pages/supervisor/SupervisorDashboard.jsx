@@ -784,7 +784,7 @@ export default function SupervisorDashboard() {
                 {verifyDetail.latitude && verifyDetail.longitude ? (
                   <div className="space-y-2 text-sm">
                     <p>
-                      Lat: <span className="font-mono">{verifyDetail.latitude}}</span>
+                      Lat: <span className="font-mono">{verifyDetail.latitude}</span>
                       <br />
                       Lng: <span className="font-mono">{verifyDetail.longitude}</span>
                     </p>

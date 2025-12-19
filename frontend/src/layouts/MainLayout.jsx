@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ToastViewport, toast } from "../components/ui/toast";
 import ConfirmLogoutModal from "../components/ui/ConfirmLogoutModal";
 import api from "../services/api";
-import logoAurora from "/home/willy/smpj/frontend/assets/Logo Jambar Jabu.jpg";
+import logoAurora from "../assets/logo-jambar-jabu.jpg";
 
 /* ======================================================
    Navigasi Berdasarkan Role
