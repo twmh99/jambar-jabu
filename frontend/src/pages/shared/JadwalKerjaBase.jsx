@@ -834,7 +834,7 @@ export default function JadwalKerjaBase({ role = "supervisor" }) {
                 title="Buat Jadwal Baru"
                 onClose={() => setModalAdd(false)}
             >
-                <form onSubmit={createSchedule} className="space-y-4">
+                <form onSubmit={createSchedule} noValidate className="space-y-4">
                     <div>
                         <Label>Pegawai</Label>
                         <select
@@ -934,7 +934,7 @@ export default function JadwalKerjaBase({ role = "supervisor" }) {
                 onClose={closeEditModal}
             >
                 {selectedEdit && (
-                    <form onSubmit={updateSchedule} className="space-y-4">
+                    <form onSubmit={updateSchedule} noValidate className="space-y-4">
                         <div>
                             <Label>Pegawai</Label>
                             <div className="ds-input bg-[hsl(var(--muted))]">

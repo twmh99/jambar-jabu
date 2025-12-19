@@ -574,7 +574,7 @@ export default function SupervisorDashboard() {
 
       {/* ===== MODAL: BUAT JADWAL BARU ===== */}
       <Modal open={modalAdd} title="Buat Jadwal Baru" onClose={() => setModalAdd(false)}>
-        <form onSubmit={createSchedule} className="space-y-4">
+        <form onSubmit={createSchedule} noValidate className="space-y-4">
           {/* === PEGAWAI === */}
           <div>
             <Label>Pegawai</Label>

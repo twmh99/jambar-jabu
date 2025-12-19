@@ -105,20 +105,23 @@ export default function AttendanceSettings() {
 
   const handleChange = (field) => (event) => {
     const value = event.target.value;
-    setSettings((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-
-    setErrors((prev) => {
-      const next = { ...prev };
-      delete next[field];
-      if (field === "latitude" || field === "longitude") {
-        delete next.latitude;
-        delete next.longitude;
-      }
-      const fieldErrors = validateField(field, value);
-      return { ...next, ...fieldErrors };
+    setSettings((prev) => {
+      const nextSettings = { ...prev, [field]: value };
+      setErrors((prevErrors) => {
+        const next = { ...prevErrors };
+        delete next[field];
+        if (field === "latitude" || field === "longitude") {
+          delete next.latitude;
+          delete next.longitude;
+          return {
+            ...next,
+            ...validateField("latitude", nextSettings.latitude),
+            ...validateField("longitude", nextSettings.longitude),
+          };
+        }
+        return { ...next, ...validateField(field, value) };
+      });
+      return nextSettings;
     });
   };
 
@@ -181,7 +184,7 @@ export default function AttendanceSettings() {
   const isRadiusValid = radiusValue >= 50 && radiusValue <= 100;
   const radiusInfo = isRadiusValid
     ? `Radius aman ${radiusValue} m dari titik kantor.`
-    : "Radius harus berada pada rentang 50 - 100 meter.";
+    : "";
 
   const mapCoords = React.useMemo(
     () => ({
@@ -354,13 +357,9 @@ export default function AttendanceSettings() {
                 onChange={handleChange("radius_m")}
                 required
               />
-              <p
-                className={`text-xs ${
-                  errors.radius_m || !isRadiusValid ? "text-red-600" : "text-muted-foreground"
-                }`}
-              >
-                {radiusInfo}
-              </p>
+              {radiusInfo ? (
+                <p className="text-xs text-muted-foreground">{radiusInfo}</p>
+              ) : null}
               <ErrorMessage message={errors.radius_m} />
             </div>
             <div className="space-y-2">

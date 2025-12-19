@@ -482,7 +482,11 @@ export default function EmployeesBase({ role }) {
           setFieldErrors({});
         }}
       >
-        <form onSubmit={save} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <form
+          onSubmit={save}
+          noValidate
+          className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+        >
           <div className="sm:col-span-2">
             <Label>Nama</Label>
             <Input
@@ -566,6 +570,7 @@ export default function EmployeesBase({ role }) {
               required
               requiredMessage="Tarif/Jam wajib diisi."
             />
+            <FieldError message={fieldErrors.hourly_rate} />
           </div>
           <div className="sm:col-span-2 flex justify-end gap-2 pt-2">
             <Button

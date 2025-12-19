@@ -209,6 +209,7 @@ export default function OwnerDashboard() {
       jabatan: normalizedJabatan,
       telepon: data.telepon,
       email: data.email,
+      hourly_rate: data.hourly_rate,
     };
 
     const formValidation = validateEmployeeData(payload);
@@ -546,6 +547,7 @@ export default function OwnerDashboard() {
         <form
           key={editId || "new"}
           onSubmit={addEmployee}
+          noValidate
           className="grid grid-cols-1 sm:grid-cols-2 gap-4"
         >
           <div className="sm:col-span-2">
@@ -630,6 +632,7 @@ export default function OwnerDashboard() {
                   : ROLE_RATE_MAP.Supervisor
               }
             />
+            <FieldError message={employeeFormErrors.hourly_rate} />
           </div>
           <div className="sm:col-span-2 flex justify-end gap-2 pt-2">
             <Button
